@@ -1,7 +1,7 @@
 import threading
 import time
 
-from framework.communication.transport import (
+from framework.communication.transport.tcp import (
     TCPClient,
     TCPServer,
     ok_response,
