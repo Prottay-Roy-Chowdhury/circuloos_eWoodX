@@ -23,6 +23,10 @@ from framework.communication.storage import (
     AgentActionStore,
 )
 
+from framework.communication.workflow import (
+    Coordinator,
+)
+
 # --------------------------------------------------
 # ACTION TEST
 # --------------------------------------------------
@@ -483,4 +487,73 @@ assert (
 
 print(
     "[test] Action discovery passed"
+)
+
+# --------------------------------------------------
+# COORDINATOR TEST
+# --------------------------------------------------
+
+coordinator = Coordinator(
+    action_store=discovery_store
+)
+
+
+claimed_for_design = (
+    coordinator.claim_next(
+        agent
+    )
+)
+
+
+print(
+    "[coordinator] design claimed:",
+    claimed_for_design.to_dict()
+)
+
+
+assert claimed_for_design is not None
+
+assert (
+    claimed_for_design.status
+    == ActionStatus.CLAIMED
+)
+
+assert (
+    claimed_for_design.claimed_by
+    == agent.agent_id
+)
+
+assert (
+    claimed_for_design.target
+    in agent.roles
+)
+
+claimed_for_robot = (
+    coordinator.claim_next(
+        robot_agent
+    )
+)
+
+
+print(
+    "[coordinator] robot claimed:",
+    claimed_for_robot.to_dict()
+)
+
+
+assert claimed_for_robot is not None
+
+assert (
+    claimed_for_robot.target
+    == "robot"
+)
+
+assert (
+    claimed_for_robot.claimed_by
+    == robot_agent.agent_id
+)
+
+
+print(
+    "[test] Coordinator passed"
 )
