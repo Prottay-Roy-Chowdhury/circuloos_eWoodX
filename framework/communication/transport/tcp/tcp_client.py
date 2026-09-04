@@ -3,8 +3,7 @@
 import socket
 from typing import Any, Dict
 
-from framework.communication.transport.tcp.config import (
-    DEFAULT_COMMAND_PORT,
+from framework.communication.transport.tcp.config import (    
     DEFAULT_CONNECT_TIMEOUT,
     DEFAULT_HOST,
 )
@@ -34,8 +33,8 @@ class TCPClient:
 
     def __init__(
         self,
-        host: str = DEFAULT_HOST,
-        port: int = DEFAULT_COMMAND_PORT,
+        port: int,
+        host: str = DEFAULT_HOST,        
         timeout: float = DEFAULT_CONNECT_TIMEOUT,
     ):
         self.host = str(host)

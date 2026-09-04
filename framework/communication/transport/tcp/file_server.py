@@ -47,6 +47,7 @@ class TCPFileServer:
 
     def __init__(
         self,
+        port: int,
         download_resolver: Optional[
             DownloadResolver
         ] = None,
@@ -54,7 +55,6 @@ class TCPFileServer:
             UploadResolver
         ] = None,
         host: str = DEFAULT_HOST,
-        port: int = 5006,
         accept_timeout: float = DEFAULT_ACCEPT_TIMEOUT,
     ):
         self.download_resolver = (

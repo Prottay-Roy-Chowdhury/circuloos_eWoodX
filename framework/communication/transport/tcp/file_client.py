@@ -32,8 +32,8 @@ class TCPFileClient:
 
     def __init__(
         self,
-        host: str = DEFAULT_HOST,
-        port: int = 5006,
+        port: int,
+        host: str = DEFAULT_HOST,        
         timeout: float = DEFAULT_CONNECT_TIMEOUT,
     ):
         self.host = str(host)

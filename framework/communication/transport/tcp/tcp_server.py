@@ -5,8 +5,7 @@ import traceback
 from typing import Any, Callable, Dict
 
 from framework.communication.transport.tcp.config import (
-    DEFAULT_ACCEPT_TIMEOUT,
-    DEFAULT_COMMAND_PORT,
+    DEFAULT_ACCEPT_TIMEOUT,    
     DEFAULT_HOST,
 )
 from framework.communication.transport.tcp.protocol import (
@@ -42,10 +41,10 @@ class TCPServer:
     """
 
     def __init__(
-        self,
+        self,        
         handler: MessageHandler,
-        host: str = DEFAULT_HOST,
-        port: int = DEFAULT_COMMAND_PORT,
+        port: int,
+        host: str = DEFAULT_HOST,        
         accept_timeout: float = DEFAULT_ACCEPT_TIMEOUT,
     ):
         if not callable(handler):

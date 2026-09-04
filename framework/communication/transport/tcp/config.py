@@ -1,7 +1,6 @@
 """Default configuration for TCP communication."""
 
 DEFAULT_HOST = "127.0.0.1"
-DEFAULT_COMMAND_PORT = 5005
 
 DEFAULT_ACCEPT_TIMEOUT = 1.0
 DEFAULT_CONNECT_TIMEOUT = 10.0
