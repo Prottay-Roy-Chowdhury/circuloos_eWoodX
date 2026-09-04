@@ -87,6 +87,11 @@ class AgentWorkflowHandler:
         if command == "consume_action":
             return self._consume_action()
 
+        if command == "mark_terminal":
+            return self._mark_terminal(
+                request
+            )
+
         return {
             "status": "error",
             "message": (
@@ -160,11 +165,118 @@ class AgentWorkflowHandler:
                 )
             )
 
+            self.local_store.mark_running_reported(
+                action_id
+            )
+
             return {
                 "status": "ok",
                 "trigger": True,
                 "action": (
                     running_action.to_dict()
+                ),
+            }
+
+        except Exception as error:
+            return {
+                "status": "error",
+                "message": str(
+                    error
+                ),
+            }
+
+    def _mark_terminal(
+        self,
+        request: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Report terminal completion of the current local action.
+
+        Master transition happens first. Only after the master
+        accepts it is the local action marked terminal.
+        """
+
+        try:
+            local_data = (
+                self.local_store
+                .find_active()
+            )
+
+            if local_data is None:
+                return {
+                    "status": "error",
+                    "message": (
+                        "No active local action."
+                    ),
+                }
+
+            action_data = local_data.get(
+                "action"
+            )
+
+            if not isinstance(
+                action_data,
+                dict,
+            ):
+                raise ValueError(
+                    "Invalid local action record."
+                )
+
+            action_id = str(
+                action_data.get(
+                    "action_id",
+                    "",
+                )
+            ).strip()
+
+            if not action_id:
+                raise ValueError(
+                    "Local action is missing action_id."
+                )
+
+            terminal_status = str(
+                request.get(
+                    "action_status",
+                    "",
+                )
+            ).strip().lower()
+
+            if terminal_status not in {
+                "completed",
+                "failed",
+                "cancelled",
+            }:
+                raise ValueError(
+                    "action_status must be completed, "
+                    "failed, or cancelled."
+                )
+
+            # ------------------------------------------
+            # 1. Master becomes terminal first.
+            # ------------------------------------------
+
+            terminal_action = (
+                self.workflow_client
+                .mark_terminal(
+                    action_id=action_id,
+                    status=terminal_status,
+                )
+            )
+
+            # ------------------------------------------
+            # 2. Only after master acceptance does the
+            #    local record become terminal.
+            # ------------------------------------------
+
+            self.local_store.mark_terminal(
+                action_id=action_id,
+                status=terminal_status,
+            )
+
+            return {
+                "status": "ok",
+                "action": (
+                    terminal_action.to_dict()
                 ),
             }
 

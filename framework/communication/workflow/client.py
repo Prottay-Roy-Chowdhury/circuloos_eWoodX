@@ -168,3 +168,69 @@ class WorkflowClient:
         return Action.from_dict(
             action_data
         )
+    def mark_terminal(
+        self,
+        action_id: str,
+        status: str,
+    ) -> Action:
+        """
+        Report a terminal action state to the master.
+        """
+
+        normalized_action_id = str(
+            action_id or ""
+        ).strip()
+
+        if not normalized_action_id:
+            raise ValueError(
+                "action_id cannot be empty."
+            )
+
+        normalized_status = str(
+            status or ""
+        ).strip().lower()
+
+        if normalized_status not in {
+            "completed",
+            "failed",
+            "cancelled",
+        }:
+            raise ValueError(
+                "status must be completed, failed, or cancelled."
+            )
+
+        response = self.tcp_client.send(
+            {
+                "command": "mark_terminal",
+                "action_id": normalized_action_id,
+                "action_status": normalized_status,
+                "agent": self.agent.to_dict(),
+            }
+        )
+
+        if (
+            response.get("status")
+            != "ok"
+        ):
+            raise RuntimeError(
+                response.get(
+                    "message",
+                    "Could not mark action as terminal.",
+                )
+            )
+
+        action_data = response.get(
+            "action"
+        )
+
+        if not isinstance(
+            action_data,
+            dict,
+        ):
+            raise TypeError(
+                "Received action must be a dictionary."
+            )
+
+        return Action.from_dict(
+            action_data
+        )

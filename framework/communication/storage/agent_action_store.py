@@ -107,6 +107,7 @@ class AgentActionStore:
         data = {
             "agent_id": self.agent.agent_id,
             "action": action.to_dict(),
+            "local_status": "claimed",
             "consumed": False,
         }
 
@@ -158,14 +159,146 @@ class AgentActionStore:
             action_id
         )
 
-        if data.get(
-            "agent_id"
-        ) != self.agent.agent_id:
+        if (
+            data.get("agent_id")
+            != self.agent.agent_id
+        ):
             raise RuntimeError(
                 "Local action belongs to another agent."
             )
 
+        current_status = str(
+            data.get(
+                "local_status",
+                "claimed",
+            )
+        ).strip().lower()
+
+        if current_status == "consumed":
+            return data
+
+        if current_status != "claimed":
+            raise RuntimeError(
+                "Local action cannot be consumed "
+                f"from status '{current_status}'."
+            )
+
         data["consumed"] = True
+        data["local_status"] = "consumed"
+
+        self._write_json(
+            self._get_path(
+                action_id
+            ),
+            data,
+        )
+
+        return data
+
+    def mark_running_reported(
+        self,
+        action_id: str,
+    ) -> Dict[str, Any]:
+        """
+        Record that running status was accepted by the master.
+        """
+
+        data = self.load(
+            action_id
+        )
+
+        if (
+            data.get("agent_id")
+            != self.agent.agent_id
+        ):
+            raise RuntimeError(
+                "Local action belongs to another agent."
+            )
+
+        current_status = str(
+            data.get(
+                "local_status",
+                "",
+            )
+        ).strip().lower()
+
+        if current_status == "running":
+            return data
+
+        if current_status not in {
+            "claimed",
+            "consumed",
+        }:
+            raise RuntimeError(
+                "Local action cannot become running "
+                f"from status '{current_status}'."
+            )
+
+        data["local_status"] = "running"
+
+        self._write_json(
+            self._get_path(
+                action_id
+            ),
+            data,
+        )
+
+        return data
+
+    def mark_terminal(
+        self,
+        action_id: str,
+        status: str,
+    ) -> Dict[str, Any]:
+        """
+        Mark the local action as terminal after the master
+        has accepted the terminal state.
+        """
+
+        normalized_status = str(
+            status or ""
+        ).strip().lower()
+
+        if normalized_status not in {
+            "completed",
+            "failed",
+            "cancelled",
+        }:
+            raise ValueError(
+                "status must be completed, failed, or cancelled."
+            )
+
+        data = self.load(
+            action_id
+        )
+
+        if (
+            data.get("agent_id")
+            != self.agent.agent_id
+        ):
+            raise RuntimeError(
+                "Local action belongs to another agent."
+            )
+
+        current_status = str(
+            data.get(
+                "local_status",
+                "",
+            )
+        ).strip().lower()
+
+        if current_status == normalized_status:
+            return data
+
+        if current_status != "running":
+            raise RuntimeError(
+                "Only a running local action "
+                "can become terminal."
+            )
+
+        data["local_status"] = (
+            normalized_status
+        )
 
         self._write_json(
             self._get_path(
@@ -239,11 +372,13 @@ class AgentActionStore:
     ) -> Dict[str, Any] | None:
         """
         Return the current active local action.
-
-        An action remains active even after it has been
-        consumed locally. It remains active until the local
-        lifecycle later marks or clears it as terminal.
         """
+
+        terminal_statuses = {
+            "completed",
+            "failed",
+            "cancelled",
+        }
 
         if not self.root.is_dir():
             return None
@@ -262,6 +397,19 @@ class AgentActionStore:
             if (
                 data.get("agent_id")
                 != self.agent.agent_id
+            ):
+                continue
+
+            local_status = str(
+                data.get(
+                    "local_status",
+                    "claimed",
+                )
+            ).strip().lower()
+
+            if (
+                local_status
+                in terminal_statuses
             ):
                 continue
 

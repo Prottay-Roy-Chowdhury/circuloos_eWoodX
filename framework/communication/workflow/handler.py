@@ -80,6 +80,11 @@ class WorkflowHandler:
                 request
             )
 
+        if command == "mark_terminal":
+            return self._mark_terminal(
+                request
+            )
+
         return {
             "status": "error",
             "message": (
@@ -178,6 +183,78 @@ class WorkflowHandler:
                 .mark_running(
                     action_id=action_id,
                     agent=agent,
+                )
+            )
+
+            return {
+                "status": "ok",
+                "action": action.to_dict(),
+            }
+
+        except Exception as error:
+            return {
+                "status": "error",
+                "message": str(
+                    error
+                ),
+            }
+
+    def _mark_terminal(
+        self,
+        request: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Mark a running action as terminal.
+        """
+
+        agent_data = request.get(
+            "agent"
+        )
+
+        if not isinstance(
+            agent_data,
+            dict,
+        ):
+            return {
+                "status": "error",
+                "message": "Missing agent data.",
+            }
+
+        action_id = str(
+            request.get(
+                "action_id",
+                "",
+            )
+        ).strip()
+
+        if not action_id:
+            return {
+                "status": "error",
+                "message": "Missing action_id.",
+            }
+
+        status_text = str(
+            request.get(
+                "action_status",
+                "",
+            )
+        ).strip().lower()
+
+        try:
+            status = ActionStatus(
+                status_text
+            )
+
+            agent = Agent.from_dict(
+                agent_data
+            )
+
+            action = (
+                self.action_store
+                .mark_terminal(
+                    action_id=action_id,
+                    agent=agent,
+                    status=status,
                 )
             )
 
