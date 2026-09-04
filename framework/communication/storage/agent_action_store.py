@@ -64,6 +64,41 @@ class AgentActionStore:
                 "Action is not claimed by this agent."
             )
 
+        active_data = self.find_active()
+
+        if active_data is not None:
+            active_action = active_data.get(
+                "action"
+            )
+
+            if not isinstance(
+                active_action,
+                dict,
+            ):
+                raise RuntimeError(
+                    "Invalid active local action record."
+                )
+
+            active_action_id = str(
+                active_action.get(
+                    "action_id",
+                    "",
+                )
+            ).strip()
+
+            if (
+                active_action_id
+                == action.action_id
+            ):
+                return self._get_path(
+                    action.action_id
+                )
+
+            raise RuntimeError(
+                "Another active local action already exists: "
+                f"{active_action_id}."
+            )
+
         self.root.mkdir(
             parents=True,
             exist_ok=True,
@@ -196,6 +231,41 @@ class AgentActionStore:
                 )
             ):
                 return data
+
+        return None
+
+    def find_active(
+        self,
+    ) -> Dict[str, Any] | None:
+        """
+        Return the current active local action.
+
+        An action remains active even after it has been
+        consumed locally. It remains active until the local
+        lifecycle later marks or clears it as terminal.
+        """
+
+        if not self.root.is_dir():
+            return None
+
+        for path in sorted(
+            self.root.glob("*.json")
+        ):
+            with path.open(
+                "r",
+                encoding="utf-8",
+            ) as file:
+                data = json.load(
+                    file
+                )
+
+            if (
+                data.get("agent_id")
+                != self.agent.agent_id
+            ):
+                continue
+
+            return data
 
         return None
 
