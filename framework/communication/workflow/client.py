@@ -116,3 +116,55 @@ class WorkflowClient:
         )
 
         return action
+
+    def mark_running(
+        self,
+        action_id: str,
+    ) -> Action:
+        """
+        Report that a claimed action has started running.
+        """
+
+        normalized_action_id = str(
+            action_id or ""
+        ).strip()
+
+        if not normalized_action_id:
+            raise ValueError(
+                "action_id cannot be empty."
+            )
+
+        response = self.tcp_client.send(
+            {
+                "command": "mark_running",
+                "action_id": normalized_action_id,
+                "agent": self.agent.to_dict(),
+            }
+        )
+
+        if (
+            response.get("status")
+            != "ok"
+        ):
+            raise RuntimeError(
+                response.get(
+                    "message",
+                    "Could not mark action as running.",
+                )
+            )
+
+        action_data = response.get(
+            "action"
+        )
+
+        if not isinstance(
+            action_data,
+            dict,
+        ):
+            raise TypeError(
+                "Received action must be a dictionary."
+            )
+
+        return Action.from_dict(
+            action_data
+        )

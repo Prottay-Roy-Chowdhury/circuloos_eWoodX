@@ -74,6 +74,11 @@ class WorkflowHandler:
             return self._claim_next(
                 request
             )
+        
+        if command == "mark_running":
+            return self._mark_running(
+                request
+            )
 
         return {
             "status": "error",
@@ -117,6 +122,68 @@ class WorkflowHandler:
                     if action is not None
                     else None
                 ),
+            }
+
+        except Exception as error:
+            return {
+                "status": "error",
+                "message": str(
+                    error
+                ),
+            }
+
+    
+
+    def _mark_running(
+        self,
+        request: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Mark a claimed action as running.
+        """
+
+        agent_data = request.get(
+            "agent"
+        )
+
+        if not isinstance(
+            agent_data,
+            dict,
+        ):
+            return {
+                "status": "error",
+                "message": "Missing agent data.",
+            }
+
+        action_id = str(
+            request.get(
+                "action_id",
+                "",
+            )
+        ).strip()
+
+        if not action_id:
+            return {
+                "status": "error",
+                "message": "Missing action_id.",
+            }
+
+        try:
+            agent = Agent.from_dict(
+                agent_data
+            )
+
+            action = (
+                self.action_store
+                .mark_running(
+                    action_id=action_id,
+                    agent=agent,
+                )
+            )
+
+            return {
+                "status": "ok",
+                "action": action.to_dict(),
             }
 
         except Exception as error:

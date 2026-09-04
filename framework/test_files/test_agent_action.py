@@ -607,3 +607,118 @@ assert (
 print(
     "[test] WorkflowHandler passed"
 )
+
+# --------------------------------------------------
+# AGENT WORKFLOW HANDLER TEST
+# --------------------------------------------------
+
+from framework.communication.workflow import (
+    AgentWorkflowHandler,
+)
+
+
+local_handler_action = Action(
+    action="generate_design",
+    target="design",
+    payload={
+        "source_artifact_id": "scan_003",
+    },
+)
+
+discovery_store.save(
+    local_handler_action
+)
+
+local_handler_claimed = (
+    discovery_store.claim(
+        action_id=(
+            local_handler_action.action_id
+        ),
+        agent=agent,
+    )
+)
+
+agent_store.save(
+    local_handler_claimed
+)
+
+
+agent_handler = AgentWorkflowHandler(
+    local_store=agent_store
+)
+
+
+consume_response = (
+    agent_handler.handle(
+        {
+            "command": "consume_action",
+        }
+    )
+)
+
+
+print(
+    "[agent-handler] consume:",
+    consume_response
+)
+
+
+assert (
+    consume_response["status"]
+    == "ok"
+)
+
+assert (
+    consume_response["trigger"]
+    is True
+)
+
+assert (
+    consume_response["action"]["action_id"]
+    == local_handler_claimed.action_id
+)
+
+assert agent_store.is_consumed(
+    local_handler_claimed.action_id
+)
+
+
+print(
+    "[test] AgentWorkflowHandler consume passed"
+)
+
+
+second_consume_response = (
+    agent_handler.handle(
+        {
+            "command": "consume_action",
+        }
+    )
+)
+
+
+print(
+    "[agent-handler] repeated consume:",
+    second_consume_response
+)
+
+
+assert (
+    second_consume_response["status"]
+    == "ok"
+)
+
+assert (
+    second_consume_response["trigger"]
+    is False
+)
+
+assert (
+    second_consume_response["action"]
+    is None
+)
+
+
+print(
+    "[test] AgentWorkflowHandler repeated consume passed"
+)

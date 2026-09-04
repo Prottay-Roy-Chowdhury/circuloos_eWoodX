@@ -160,6 +160,45 @@ class AgentActionStore:
             )
         )
 
+    def find_unconsumed(
+        self,
+    ) -> Dict[str, Any] | None:
+        """
+        Return the current unconsumed local action.
+
+        Returns None when no unconsumed action exists.
+        """
+
+        if not self.root.is_dir():
+            return None
+
+        for path in sorted(
+            self.root.glob("*.json")
+        ):
+            with path.open(
+                "r",
+                encoding="utf-8",
+            ) as file:
+                data = json.load(
+                    file
+                )
+
+            if (
+                data.get("agent_id")
+                != self.agent.agent_id
+            ):
+                continue
+
+            if not bool(
+                data.get(
+                    "consumed",
+                    False,
+                )
+            ):
+                return data
+
+        return None
+
     def exists(
         self,
         action_id: str,
