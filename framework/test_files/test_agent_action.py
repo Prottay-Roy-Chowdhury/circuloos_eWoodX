@@ -25,6 +25,7 @@ from framework.communication.storage import (
 
 from framework.communication.workflow import (
     Coordinator,
+    WorkflowHandler,
 )
 
 # --------------------------------------------------
@@ -556,4 +557,53 @@ assert (
 
 print(
     "[test] Coordinator passed"
+)
+
+# --------------------------------------------------
+# WORKFLOW HANDLER TEST
+# --------------------------------------------------
+
+handler = WorkflowHandler(
+    action_store=discovery_store
+)
+
+
+handler_response = handler.handle(
+    {
+        "command": "claim_next",
+        "agent": {
+            "agent_id": "design_pc_02",
+            "roles": [
+                "design",
+                "preview",
+            ],
+        },
+    }
+)
+
+
+print(
+    "[handler] response:",
+    handler_response
+)
+
+
+assert (
+    handler_response["status"]
+    == "ok"
+)
+
+assert (
+    handler_response["action"]
+    is not None
+)
+
+assert (
+    handler_response["action"]["claimed_by"]
+    == "design_pc_02"
+)
+
+
+print(
+    "[test] WorkflowHandler passed"
 )
