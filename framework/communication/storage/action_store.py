@@ -291,3 +291,73 @@ class ActionStore:
         )
 
         return action
+
+    def list_actions(
+        self,
+    ) -> list[Action]:
+        """
+        Load all stored actions.
+        """
+
+        if not self.root.is_dir():
+            return []
+
+        actions = []
+
+        for path in sorted(
+            self.root.glob("*.json")
+        ):
+            with path.open(
+                "r",
+                encoding="utf-8",
+            ) as file:
+                data = json.load(
+                    file
+                )
+
+            actions.append(
+                Action.from_dict(
+                    data
+                )
+            )
+
+        return actions
+
+    def find_pending(
+        self,
+        targets: list[str] | None = None,
+    ) -> list[Action]:
+        """
+        Find pending actions, optionally filtered by target.
+        """
+
+        normalized_targets = None
+
+        if targets is not None:
+            normalized_targets = {
+                str(target).strip().lower()
+                for target in targets
+                if str(target).strip()
+            }
+
+        pending_actions = []
+
+        for action in self.list_actions():
+            if (
+                action.status
+                != ActionStatus.PENDING
+            ):
+                continue
+
+            if (
+                normalized_targets is not None
+                and action.target
+                not in normalized_targets
+            ):
+                continue
+
+            pending_actions.append(
+                action
+            )
+
+        return pending_actions

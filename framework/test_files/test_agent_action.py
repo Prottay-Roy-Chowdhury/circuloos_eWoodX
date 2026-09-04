@@ -1,5 +1,6 @@
 from pathlib import Path
 import sys
+import shutil
 
 
 PROJECT_ROOT = Path(
@@ -19,6 +20,7 @@ from framework.communication.core import (
 
 from framework.communication.storage import (
     ActionStore,
+    AgentActionStore,
 )
 
 # --------------------------------------------------
@@ -238,6 +240,62 @@ assert (
     == agent.agent_id
 )
 
+# --------------------------------------------------
+# AGENT LOCAL ACTION STORE TEST
+# --------------------------------------------------
+
+agent_store = AgentActionStore(
+    root=(
+        PROJECT_ROOT
+        / "test_file_transfer_data"
+        / "test_data"
+        / "agent_actions"
+    ),
+    agent=agent,
+)
+
+
+local_path = agent_store.save(
+    claimed_action
+)
+
+
+print(
+    "[agent-store] saved:",
+    local_path
+)
+
+
+assert agent_store.exists(
+    claimed_action.action_id
+)
+
+assert not agent_store.is_consumed(
+    claimed_action.action_id
+)
+
+
+consumed_data = (
+    agent_store.mark_consumed(
+        claimed_action.action_id
+    )
+)
+
+
+print(
+    "[agent-store] consumed:",
+    consumed_data
+)
+
+
+assert agent_store.is_consumed(
+    claimed_action.action_id
+)
+
+
+print(
+    "[test] AgentActionStore passed"
+)
 
 print(
     "[test] Action claim passed"
@@ -277,4 +335,152 @@ assert (
 
 print(
     "[test] Action lifecycle passed"
+)
+
+# --------------------------------------------------
+# ACTION DISCOVERY TEST
+# --------------------------------------------------
+
+discovery_root = (
+    PROJECT_ROOT
+    / "test_file_transfer_data"
+    / "test_data"
+    / "discovery_actions"
+)
+
+
+shutil.rmtree(
+    discovery_root,
+    ignore_errors=True,
+)
+
+
+discovery_store = ActionStore(
+    root=discovery_root
+)
+
+design_action = Action(
+    action="generate_design",
+    target="design",
+    payload={
+        "source_artifact_id": "scan_002",
+    },
+)
+
+
+preview_action = Action(
+    action="generate_preview",
+    target="preview",
+    payload={
+        "source_artifact_id": "design_001",
+    },
+)
+
+
+robot_action = Action(
+    action="execute_robot",
+    target="robot",
+    payload={
+        "source_artifact_id": "toolpath_001",
+    },
+)
+
+discovery_store.save(
+    design_action
+)
+
+discovery_store.save(
+    preview_action
+)
+
+discovery_store.save(
+    robot_action
+)
+
+all_actions = (
+    discovery_store.list_actions()
+)
+
+
+print(
+    "[discovery] all actions:",
+    [
+        item.action
+        for item in all_actions
+    ]
+)
+
+
+assert len(
+    all_actions
+) == 3
+
+design_pending = (
+    discovery_store.find_pending(
+        targets=agent.roles
+    )
+)
+
+
+print(
+    "[discovery] design agent:",
+    [
+        {
+            "action": item.action,
+            "target": item.target,
+        }
+        for item in design_pending
+    ]
+)
+
+assert len(
+    design_pending
+) == 2
+
+
+assert {
+    item.target
+    for item in design_pending
+} == {
+    "design",
+    "preview",
+}
+
+robot_agent = Agent(
+    agent_id="robot_pc_01",
+    roles=[
+        "robot",
+    ],
+)
+
+robot_pending = (
+    discovery_store.find_pending(
+        targets=robot_agent.roles
+    )
+)
+
+
+print(
+    "[discovery] robot agent:",
+    [
+        {
+            "action": item.action,
+            "target": item.target,
+        }
+        for item in robot_pending
+    ]
+)
+
+
+assert len(
+    robot_pending
+) == 1
+
+assert (
+    robot_pending[0].target
+    == "robot"
+)
+
+print(
+    "[test] Action discovery passed"
 )
