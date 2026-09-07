@@ -221,20 +221,20 @@ master_store.save(
 print()
 print(
     "[master] action 1 created:",
-    action_1.to_dict()
+    action_1.to_dict(),
 )
 
 
-# --------------------------------------------------
-# START POLLER
-# --------------------------------------------------
+# ==================================================
+# START BACKGROUND POLLER
+# ==================================================
 
 assert poller.start() is True
 
 
-# --------------------------------------------------
-# BACKGROUND CLAIM
-# --------------------------------------------------
+# ==================================================
+# ACTION 1 AUTOMATIC CLAIM
+# ==================================================
 
 claimed_1 = wait_until(
     lambda: (
@@ -257,16 +257,27 @@ local_action_1 = agent_store.load(
 )
 
 
+print()
 print(
     "[master] action 1 claimed:",
-    master_action_1.to_dict()
+    master_action_1.to_dict(),
 )
 
 print(
     "[agent-store] action 1 claimed:",
-    local_action_1
+    local_action_1,
 )
 
+
+assert (
+    master_action_1.status
+    == ActionStatus.CLAIMED
+)
+
+assert (
+    master_action_1.claimed_by
+    == agent.agent_id
+)
 
 assert (
     local_action_1["local_status"]
@@ -278,15 +289,22 @@ assert (
     is False
 )
 
+assert (
+    local_action_1["terminal_reported"]
+    is False
+)
+
 
 # ==================================================
 # PREMATURE TERMINAL REQUEST
 #
-# Important failure-boundary test.
+# The action has only been claimed.
 #
-# Master action is only CLAIMED, not RUNNING.
-# Completion must fail and local action must remain
-# active/claimed.
+# A terminal outcome belongs to executed work, so a
+# claimed action cannot become terminal.
+#
+# The request must fail without changing either the
+# master or local lifecycle state.
 # ==================================================
 
 premature_terminal = (
@@ -302,7 +320,7 @@ premature_terminal = (
 print()
 print(
     "[grasshopper] premature terminal:",
-    premature_terminal
+    premature_terminal,
 )
 
 
@@ -336,20 +354,29 @@ assert (
 )
 
 assert (
+    local_after_premature["terminal_reported"]
+    is False
+)
+
+assert (
     agent_store.find_active()
     is not None
 )
 
 
 print(
-    "[test] premature completion did not free agent"
+    "[test] premature completion did not "
+    "change or release action 1"
 )
 
 
 # ==================================================
 # ACTION 2
 #
-# Add it while action 1 remains active.
+# Create another eligible action while action 1 is
+# still active.
+#
+# The agent must not claim it yet.
 # ==================================================
 
 action_2 = Action(
@@ -370,21 +397,31 @@ master_store.save(
 print()
 print(
     "[master] action 2 created:",
-    action_2.to_dict()
+    action_2.to_dict(),
 )
 
 
-# Let several poll cycles happen.
+# Let several background poll cycles happen.
 time.sleep(
     POLL_INTERVAL * 3
 )
 
 
-assert (
+master_action_2_pending = (
     master_store.load(
         action_2.action_id
-    ).status
+    )
+)
+
+
+assert (
+    master_action_2_pending.status
     == ActionStatus.PENDING
+)
+
+assert (
+    master_action_2_pending.claimed_by
+    is None
 )
 
 
@@ -396,6 +433,18 @@ print(
 
 # ==================================================
 # GRASSHOPPER CONSUMES ACTION 1
+#
+# Expected workflow:
+#
+# GH
+#   ↓ consume_action
+# agent marks consumed locally
+#   ↓
+# agent reports running to master
+#   ↓
+# master CLAIMED -> RUNNING
+#   ↓ acknowledgement
+# agent local CONSUMED -> RUNNING
 # ==================================================
 
 consume_response = (
@@ -410,7 +459,7 @@ consume_response = (
 print()
 print(
     "[grasshopper] consume action 1:",
-    consume_response
+    consume_response,
 )
 
 
@@ -459,15 +508,55 @@ assert (
     == "running"
 )
 
+assert (
+    local_running["terminal_reported"]
+    is False
+)
+
 
 print(
     "[master] action 1 running:",
-    master_running.to_dict()
+    master_running.to_dict(),
 )
 
 print(
     "[agent-store] action 1 running:",
-    local_running
+    local_running,
+)
+
+
+# --------------------------------------------------
+# REPEATED CONSUME MUST NOT RETRIGGER ACTION 1
+# --------------------------------------------------
+
+second_consume_response = (
+    grasshopper_client.send(
+        {
+            "command": "consume_action",
+        }
+    )
+)
+
+
+assert (
+    second_consume_response["status"]
+    == "ok"
+)
+
+assert (
+    second_consume_response["trigger"]
+    is False
+)
+
+assert (
+    second_consume_response["action"]
+    is None
+)
+
+
+print(
+    "[test] repeated consume did not "
+    "retrigger action 1"
 )
 
 
@@ -491,13 +580,29 @@ assert (
 # ==================================================
 # COMPLETE ACTION 1
 #
-# GH -> agent TCP
-# agent -> master TCP
+# Execution ownership rule:
 #
-# Required ordering:
+# The agent is the executor of this action.
 #
-# master running -> completed
-# local running  -> completed
+# Therefore:
+#
+# 1. agent records COMPLETED locally first
+#       terminal_reported=False
+#
+# 2. agent reports COMPLETED to master
+#
+# 3. master RUNNING -> COMPLETED
+#
+# 4. master acknowledgement is received
+#
+# 5. agent sets terminal_reported=True
+#
+# Only after step 5 is the local action released.
+#
+# The intermediate terminal_reported=False state is
+# tested explicitly in test_terminal_sync.py.
+# This real-TCP integration test verifies the complete
+# successful transaction.
 # ==================================================
 
 terminal_response = (
@@ -513,7 +618,7 @@ terminal_response = (
 print()
 print(
     "[grasshopper] complete action 1:",
-    terminal_response
+    terminal_response,
 )
 
 
@@ -539,7 +644,7 @@ assert (
 
 
 # --------------------------------------------------
-# VERIFY LOCAL TERMINAL
+# VERIFY LOCAL TERMINAL AND SYNCHRONIZED
 # --------------------------------------------------
 
 local_completed = agent_store.load(
@@ -552,27 +657,79 @@ assert (
     == "completed"
 )
 
+assert (
+    local_completed["consumed"]
+    is True
+)
+
+assert (
+    local_completed["terminal_reported"]
+    is True
+)
+
 
 print(
     "[master] action 1 completed:",
-    master_completed.to_dict()
+    master_completed.to_dict(),
 )
 
 print(
-    "[agent-store] action 1 completed:",
-    local_completed
+    "[agent-store] action 1 completed "
+    "and synchronized:",
+    local_completed,
+)
+
+
+# ==================================================
+# ACTION 1 MUST NOW BE LOCALLY INACTIVE
+#
+# Terminal alone does not release an action.
+#
+# The release condition is:
+#
+# terminal status
+# +
+# terminal_reported=True
+# ==================================================
+
+active_after_completion = (
+    agent_store.find_active()
+)
+
+
+# At this exact instant the poller may already have
+# claimed action 2. Therefore:
+#
+# - None is valid if it has not claimed yet.
+# - action 2 is valid if it has already claimed it.
+# - action 1 must NEVER be returned again.
+
+if active_after_completion is not None:
+    assert (
+        active_after_completion[
+            "action"
+        ][
+            "action_id"
+        ]
+        != action_1.action_id
+    )
+
+
+print(
+    "[test] synchronized terminal action 1 "
+    "is no longer active"
 )
 
 
 # ==================================================
 # CRITICAL AUTONOMOUS TRANSITION
 #
-# The poller should now see:
+# The background poller must now see that action 1
+# has completed AND its terminal outcome has been
+# acknowledged.
 #
-# action 1 = terminal locally
-#           -> not active
-#
-# then automatically claim action 2.
+# Therefore the agent is free and may automatically
+# claim action 2.
 # ==================================================
 
 action_2_claimed = wait_until(
@@ -601,14 +758,19 @@ local_action_2 = agent_store.load(
 print()
 print(
     "[master] action 2 automatically claimed:",
-    master_action_2.to_dict()
+    master_action_2.to_dict(),
 )
 
 print(
     "[agent-store] action 2:",
-    local_action_2
+    local_action_2,
 )
 
+
+assert (
+    master_action_2.status
+    == ActionStatus.CLAIMED
+)
 
 assert (
     master_action_2.claimed_by
@@ -625,29 +787,44 @@ assert (
     is False
 )
 
+assert (
+    local_action_2["terminal_reported"]
+    is False
+)
 
-# --------------------------------------------------
+
+# ==================================================
 # TERMINAL ACTION 1 MUST STILL EXIST
 #
-# We retain local terminal history rather than
-# deleting it.
-# --------------------------------------------------
+# Terminal history is retained locally.
+#
+# It is ignored by find_active() because its terminal
+# outcome has already been synchronized.
+# ==================================================
 
 assert agent_store.exists(
     action_1.action_id
 )
 
-assert (
-    agent_store.load(
-        action_1.action_id
-    )["local_status"]
-    == "completed"
+stored_action_1 = agent_store.load(
+    action_1.action_id
 )
 
 
-# --------------------------------------------------
-# find_active() MUST NOW SELECT ACTION 2
-# --------------------------------------------------
+assert (
+    stored_action_1["local_status"]
+    == "completed"
+)
+
+assert (
+    stored_action_1["terminal_reported"]
+    is True
+)
+
+
+# ==================================================
+# find_active() MUST SELECT ACTION 2
+# ==================================================
 
 active_local = (
     agent_store.find_active()
@@ -657,14 +834,57 @@ active_local = (
 assert active_local is not None
 
 assert (
-    active_local["action"]["action_id"]
+    active_local[
+        "action"
+    ][
+        "action_id"
+    ]
     == action_2.action_id
 )
 
 
 print(
-    "[poller] terminal action 1 ignored; "
-    "action 2 is now active"
+    "[poller] synchronized terminal action 1 "
+    "ignored; action 2 is now active"
+)
+
+
+# ==================================================
+# MASTER FINAL STATE
+# ==================================================
+
+assert (
+    master_store.load(
+        action_1.action_id
+    ).status
+    == ActionStatus.COMPLETED
+)
+
+assert (
+    master_store.load(
+        action_2.action_id
+    ).status
+    == ActionStatus.CLAIMED
+)
+
+
+print()
+print(
+    "[master] final state:"
+)
+
+print(
+    "  action 1 =",
+    master_store.load(
+        action_1.action_id
+    ).status.value,
+)
+
+print(
+    "  action 2 =",
+    master_store.load(
+        action_2.action_id
+    ).status.value,
 )
 
 
