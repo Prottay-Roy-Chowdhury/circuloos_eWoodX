@@ -195,6 +195,18 @@ class Orchestrator:
         ):
             return None
 
+        existing_successor = (
+            self._find_successor(
+                definition=definition,
+                completed_action=completed_action,
+                orchestration_id=orchestration_id,
+                step_index=next_index,
+            )
+        )
+
+        if existing_successor is not None:
+            return existing_successor
+
         next_metadata = dict(
             metadata
             or {}
@@ -213,6 +225,101 @@ class Orchestrator:
             payload=payload,
             metadata=next_metadata,
         )
+
+    def _find_successor(
+        self,
+        definition: OrchestrationDefinition,
+        completed_action: Action,
+        orchestration_id: str,
+        step_index: int,
+    ) -> Action | None:
+        """
+        Find an already released successor action.
+
+        A completed action may release at most one
+        successor action.
+        """
+
+        successors = []
+
+        for action in (
+            self.action_store
+            .list_actions()
+        ):
+            if (
+                action.metadata.get(
+                    "previous_action_id"
+                )
+                != completed_action.action_id
+            ):
+                continue
+
+            successors.append(
+                action
+            )
+
+        if not successors:
+            return None
+
+        if len(successors) > 1:
+            raise RuntimeError(
+                "Multiple successor actions exist "
+                "for the same completed action."
+            )
+
+        successor = successors[0]
+
+        expected_step = (
+            definition.get_step(
+                step_index
+            )
+        )
+
+        if (
+            successor.metadata.get(
+                "orchestration_id"
+            )
+            != orchestration_id
+        ):
+            raise RuntimeError(
+                "Existing successor belongs to "
+                "another orchestration."
+            )
+
+        if (
+            successor.metadata.get(
+                "orchestration_name"
+            )
+            != definition.name
+        ):
+            raise RuntimeError(
+                "Existing successor belongs to "
+                "another orchestration definition."
+            )
+
+        if (
+            successor.metadata.get(
+                "orchestration_step_index"
+            )
+            != step_index
+        ):
+            raise RuntimeError(
+                "Existing successor has an invalid "
+                "orchestration step index."
+            )
+
+        if (
+            successor.metadata.get(
+                "orchestration_step_id"
+            )
+            != expected_step.step_id
+        ):
+            raise RuntimeError(
+                "Existing successor does not match "
+                "the expected orchestration step."
+            )
+
+        return successor
 
     def _create_action(
         self,
