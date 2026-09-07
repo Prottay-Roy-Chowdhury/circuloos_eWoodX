@@ -109,6 +109,7 @@ class AgentActionStore:
             "action": action.to_dict(),
             "local_status": "claimed",
             "consumed": False,
+            "terminal_reported": False,
         }
 
         path = self._get_path(
@@ -251,8 +252,10 @@ class AgentActionStore:
         status: str,
     ) -> Dict[str, Any]:
         """
-        Mark the local action as terminal after the master
-        has accepted the terminal state.
+        Record the terminal execution outcome locally.
+
+        The executing agent records its own outcome before
+        reporting that outcome to the master.
         """
 
         normalized_status = str(
@@ -287,6 +290,13 @@ class AgentActionStore:
             )
         ).strip().lower()
 
+        # ------------------------------------------
+        # Idempotent retry:
+        # the same terminal result may already have
+        # been recorded locally while reporting to
+        # the master is still pending.
+        # ------------------------------------------
+
         if current_status == normalized_status:
             return data
 
@@ -299,6 +309,65 @@ class AgentActionStore:
         data["local_status"] = (
             normalized_status
         )
+
+        data["terminal_reported"] = False
+
+        self._write_json(
+            self._get_path(
+                action_id
+            ),
+            data,
+        )
+
+        return data
+
+    def mark_terminal_reported(
+        self,
+        action_id: str,
+    ) -> Dict[str, Any]:
+        """
+        Record that the local terminal outcome was accepted
+        by the master.
+        """
+
+        data = self.load(
+            action_id
+        )
+
+        if (
+            data.get("agent_id")
+            != self.agent.agent_id
+        ):
+            raise RuntimeError(
+                "Local action belongs to another agent."
+            )
+
+        current_status = str(
+            data.get(
+                "local_status",
+                "",
+            )
+        ).strip().lower()
+
+        if current_status not in {
+            "completed",
+            "failed",
+            "cancelled",
+        }:
+            raise RuntimeError(
+                "Only a terminal local action "
+                "can be marked as reported."
+            )
+
+        if bool(
+            data.get(
+                "terminal_reported",
+                False,
+            )
+        ):
+            return data
+
+        data["terminal_reported"] = True
 
         self._write_json(
             self._get_path(
@@ -411,7 +480,15 @@ class AgentActionStore:
                 local_status
                 in terminal_statuses
             ):
-                continue
+                terminal_reported = bool(
+                    data.get(
+                        "terminal_reported",
+                        False,
+                    )
+                )
+
+                if terminal_reported:
+                    continue
 
             return data
 

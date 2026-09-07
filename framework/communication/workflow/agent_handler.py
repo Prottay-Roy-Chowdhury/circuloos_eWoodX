@@ -190,10 +190,11 @@ class AgentWorkflowHandler:
         request: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
-        Report terminal completion of the current local action.
+        Report the terminal outcome of the current local action.
 
-        Master transition happens first. Only after the master
-        accepts it is the local action marked terminal.
+        The executing agent records its outcome locally first.
+        The outcome is then reported to the master. The local
+        record is released only after master acknowledgement.
         """
 
         try:
@@ -252,7 +253,18 @@ class AgentWorkflowHandler:
                 )
 
             # ------------------------------------------
-            # 1. Master becomes terminal first.
+            # 1. The executor records its own outcome
+            #    locally first.
+            # ------------------------------------------
+
+            self.local_store.mark_terminal(
+                action_id=action_id,
+                status=terminal_status,
+            )
+
+            # ------------------------------------------
+            # 2. Report that local outcome to the
+            #    coordinator/master.
             # ------------------------------------------
 
             terminal_action = (
@@ -264,13 +276,12 @@ class AgentWorkflowHandler:
             )
 
             # ------------------------------------------
-            # 2. Only after master acceptance does the
-            #    local record become terminal.
+            # 3. Master accepted the terminal outcome.
+            #    Record synchronization locally.
             # ------------------------------------------
 
-            self.local_store.mark_terminal(
-                action_id=action_id,
-                status=terminal_status,
+            self.local_store.mark_terminal_reported(
+                action_id
             )
 
             return {

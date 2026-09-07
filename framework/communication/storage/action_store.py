@@ -276,6 +276,17 @@ class ActionStore:
                 "Action is claimed by another agent."
             )
 
+        # ------------------------------------------
+        # Idempotent terminal report.
+        #
+        # The executor may retry the report when the
+        # master transition succeeded but the response
+        # was lost.
+        # ------------------------------------------
+
+        if action.status == status:
+            return action
+
         if (
             action.status
             != ActionStatus.RUNNING
