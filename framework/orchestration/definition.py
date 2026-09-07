@@ -9,7 +9,7 @@ class OrchestrationDefinition:
     """
     Define an ordered sequence of orchestration steps.
 
-    The definition describes workflow structure only.
+    The definition describes orchestration structure only.
 
     It does not create actions, persist state,
     communicate with agents, or execute work.
@@ -90,6 +90,15 @@ class OrchestrationDefinition:
                 "index must be an integer."
             )
 
+        if (
+            index < 0
+            or index >= len(self.steps)
+        ):
+            raise IndexError(
+                "index is outside the "
+                "orchestration step range."
+            )
+
         return self.steps[
             index
         ]
@@ -110,6 +119,15 @@ class OrchestrationDefinition:
         ):
             raise TypeError(
                 "index must be an integer."
+            )
+
+        if (
+            index < 0
+            or index >= len(self.steps)
+        ):
+            raise IndexError(
+                "index is outside the "
+                "orchestration step range."
             )
 
         next_index = (

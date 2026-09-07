@@ -1,4 +1,4 @@
-"""Sequential project level orchestration orchestration."""
+"""Sequential project-level orchestration."""
 
 from typing import Any, Dict
 from uuid import uuid4
@@ -53,7 +53,7 @@ class Orchestrator:
         metadata: Dict[str, Any] | None = None,
     ) -> Action:
         """
-        Start a orchestration.
+        Start an orchestration.
 
         Only the first orchestration step becomes
         a pending distributed Action.
@@ -119,7 +119,7 @@ class Orchestrator:
         ):
             raise RuntimeError(
                 "Only a completed action can "
-                "advance a orchestration."
+                "advance an orchestration."
             )
 
         orchestration_id = (
@@ -247,6 +247,18 @@ class Orchestrator:
 
             action_payload.update(
                 payload
+            )
+
+        if (
+            metadata is not None
+            and not isinstance(
+                metadata,
+                dict,
+            )
+        ):
+            raise TypeError(
+                "metadata must be a dictionary "
+                "or None."
             )
 
         action_metadata = dict(

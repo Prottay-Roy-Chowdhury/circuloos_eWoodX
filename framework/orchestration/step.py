@@ -9,7 +9,7 @@ class OrchestrationStep:
     """
     Describe one step in a project orchestration.
 
-    A orchestration step defines:
+    An orchestration step defines:
 
         - a unique step identifier
         - the action to create
