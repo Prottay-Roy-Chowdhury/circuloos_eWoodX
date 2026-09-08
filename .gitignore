@@ -1,5 +1,5 @@
 **/__pycache__/
-**/sessions/
+**/workspaces/
 **/test_file_transfer_data/
 *.pyc
 
@@ -24,4 +24,4 @@
 .env
 venv/
 
-.last_session
+.last_workspace
