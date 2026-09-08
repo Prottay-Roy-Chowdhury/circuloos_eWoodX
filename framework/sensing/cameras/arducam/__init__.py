@@ -1,4 +1,4 @@
-from framework.sensing.cameras import (
+from framework.sensing.cameras.arducam.camera import (
     ArducamCamera,
 )
 
