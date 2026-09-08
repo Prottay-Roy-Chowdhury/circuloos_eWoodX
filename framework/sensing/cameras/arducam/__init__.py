@@ -10,9 +10,13 @@ from framework.sensing.cameras.arducam.extrinsic_calibration import (
     ArducamExtrinsicCalibration,
 )
 
+from framework.sensing.cameras.arducam.aruco_detector import (
+    ArducamArucoDetector,
+)
 
 __all__ = [
     "ArducamCamera",
     "ArducamIntrinsicCalibration",
     "ArducamExtrinsicCalibration",
+    "ArducamArucoDetector",
 ]
