@@ -57,3 +57,29 @@ ARDUCAM_CALIBRATION_LAYOUT = {
         "arducam/extrinsic/images"
     ),
 }
+
+# ---------------------------------------------------------------------
+# Arducam extrinsic calibration
+# ---------------------------------------------------------------------
+
+ARDUCAM_ARUCO_DICTIONARY = (
+    "DICT_4X4_50"
+)
+
+ARDUCAM_MARKER_SIZE_MM = (
+    100.0
+)
+
+ARDUCAM_MARKER_WORLD_POSITIONS_MM = {
+    1: (0.0, 0.0),
+    0: (776.0, 0.0),
+    2: (0.0, 440.0),
+    3: (776.0, 440.0),
+}
+
+ARDUCAM_MARKER_OUTER_CORNERS = {
+    0: 0,
+    1: 1,
+    2: 2,
+    3: 3,
+}
