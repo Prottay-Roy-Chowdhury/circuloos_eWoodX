@@ -16,6 +16,7 @@ sys.path.insert(
 
 
 from framework.sensing import (
+    ArducamCamera,
     ArducamArucoDetector,
     ArducamExtrinsicCalibration,
     ArducamIntrinsicCalibration,
@@ -23,6 +24,9 @@ from framework.sensing import (
 
 from projects.ewoodx.config import (
     CALIBRATION_ROOT,
+    ARDUCAM_CAMERA_INDEX,
+    ARDUCAM_IMAGE_WIDTH,
+    ARDUCAM_IMAGE_HEIGHT,
     ARDUCAM_ARUCO_DICTIONARY,
     ARDUCAM_MARKER_SIZE_MM,
     ARDUCAM_MARKER_WORLD_POSITIONS_MM,
@@ -35,14 +39,17 @@ class EWoodXArducamExtrinsicCalibration:
     eWoodX project operation for Arducam planar
     extrinsic calibration.
 
-    The operation combines reusable framework
-    capabilities with the eWoodX-specific ArUco
-    marker arrangement and physical coordinates.
+    The operation provides interactive capture
+    of the physical reference surface and combines
+    reusable framework capabilities with the
+    eWoodX-specific ArUco marker arrangement and
+    physical coordinates.
     """
 
     def __init__(
         self,
         intrinsic_file: Path | None = None,
+        calibration_image: Path | None = None,
         output_file: Path | None = None,
     ) -> None:
 
@@ -54,6 +61,18 @@ class EWoodXArducamExtrinsicCalibration:
                 / "arducam"
                 / "intrinsic"
                 / "camera_intrinsics.npz"
+            )
+        )
+
+        self.calibration_image = (
+            Path(calibration_image)
+            if calibration_image is not None
+            else (
+                CALIBRATION_ROOT
+                / "arducam"
+                / "extrinsic"
+                / "images"
+                / "workspace.jpg"
             )
         )
 
@@ -84,6 +103,20 @@ class EWoodXArducamExtrinsicCalibration:
             ARDUCAM_MARKER_OUTER_CORNERS
         )
 
+        self.camera = (
+            ArducamCamera(
+                camera_index=(
+                    ARDUCAM_CAMERA_INDEX
+                ),
+                width=(
+                    ARDUCAM_IMAGE_WIDTH
+                ),
+                height=(
+                    ARDUCAM_IMAGE_HEIGHT
+                ),
+            )
+        )
+
         self.intrinsic_calibration = None
 
         self.detector = (
@@ -102,14 +135,140 @@ class EWoodXArducamExtrinsicCalibration:
         self.pixel_points = None
         self.world_points_mm = None
 
-    def run(
+    def capture_image(
         self,
-        image_path: Path,
+    ) -> Path:
+        """
+        Interactively capture the eWoodX
+        extrinsic calibration image.
+
+        SPACE = capture image and continue
+        ENTER = exit without calibration
+        """
+
+        self.calibration_image.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        print(
+            "[eWoodX] Opening Arducam camera..."
+        )
+
+        self.camera.open()
+
+        print(
+            "[eWoodX] Camera opened."
+        )
+
+        print(
+            "[eWoodX] Camera resolution:"
+        )
+
+        print(
+            self.camera.resolution
+        )
+
+        print(
+            "[eWoodX] Place the reference surface "
+            "and all expected ArUco markers in view."
+        )
+
+        print(
+            "[eWoodX] SPACE = capture and calibrate"
+        )
+
+        print(
+            "[eWoodX] ENTER = exit"
+        )
+
+        try:
+
+            while True:
+
+                frame = (
+                    self.camera.capture()
+                )
+
+                cv2.imshow(
+                    "eWoodX Arducam Extrinsic Calibration",
+                    frame,
+                )
+
+                key = (
+                    cv2.waitKey(1)
+                    & 0xFF
+                )
+
+                if key == 32:
+
+                    success = (
+                        cv2.imwrite(
+                            str(
+                                self.calibration_image
+                            ),
+                            frame,
+                            [
+                                cv2.IMWRITE_JPEG_QUALITY,
+                                100,
+                            ],
+                        )
+                    )
+
+                    if not success:
+                        raise RuntimeError(
+                            "Could not save extrinsic "
+                            "calibration image: "
+                            f"{self.calibration_image}"
+                        )
+
+                    print(
+                        "[eWoodX] Extrinsic calibration "
+                        "image saved:"
+                    )
+
+                    print(
+                        self.calibration_image
+                    )
+
+                    return (
+                        self.calibration_image
+                    )
+
+                elif key in (
+                    10,
+                    13,
+                ):
+
+                    print(
+                        "[eWoodX] Extrinsic calibration "
+                        "cancelled."
+                    )
+
+                    raise KeyboardInterrupt(
+                        "Extrinsic calibration cancelled."
+                    )
+
+        finally:
+
+            self.camera.close()
+
+            cv2.destroyAllWindows()
+
+    def calibrate(
+        self,
+        image_path: Path | None = None,
     ) -> ArducamExtrinsicCalibration:
         """
-        Run the complete eWoodX Arducam
-        extrinsic calibration operation.
+        Calculate the eWoodX Arducam
+        extrinsic calibration from a captured
+        or existing calibration image.
         """
+
+        if image_path is None:
+            image_path = (
+                self.calibration_image
+            )
 
         image_path = Path(
             image_path
@@ -216,6 +375,25 @@ class EWoodXArducamExtrinsicCalibration:
 
         return (
             self.extrinsic_calibration
+        )
+
+    def run(
+        self,
+    ) -> ArducamExtrinsicCalibration:
+        """
+        Capture the physical reference surface
+        interactively and then perform the
+        complete extrinsic calibration.
+        """
+
+        image_path = (
+            self.capture_image()
+        )
+
+        return (
+            self.calibrate(
+                image_path=image_path
+            )
         )
 
     def _load_image(
@@ -366,21 +544,11 @@ class EWoodXArducamExtrinsicCalibration:
 
 def main() -> None:
 
-    image_path = (
-        CALIBRATION_ROOT
-        / "arducam"
-        / "extrinsic"
-        / "images"
-        / "workspace.jpg"
-    )
-
     operation = (
         EWoodXArducamExtrinsicCalibration()
     )
 
-    operation.run(
-        image_path=image_path
-    )
+    operation.run()
 
 
 if __name__ == "__main__":

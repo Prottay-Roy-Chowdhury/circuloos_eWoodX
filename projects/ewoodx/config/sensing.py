@@ -21,8 +21,8 @@ CALIBRATION_ROOT = (
 
 ARDUCAM_CAMERA_INDEX = 1
 
-ARDUCAM_IMAGE_WIDTH = 5472
-ARDUCAM_IMAGE_HEIGHT = 3648
+ARDUCAM_IMAGE_WIDTH = 1280
+ARDUCAM_IMAGE_HEIGHT = 720
 
 
 # ---------------------------------------------------------------------
