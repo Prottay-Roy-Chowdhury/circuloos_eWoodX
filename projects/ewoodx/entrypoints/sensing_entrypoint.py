@@ -27,6 +27,10 @@ from projects.ewoodx.operations.timber_segmentation_arducam import (
     EWoodXTimberSegmentationArducam,
 )
 
+from projects.ewoodx.operations.timber_segmentation_angetube import (
+    EWoodXTimberSegmentationAngetube,
+)
+
 
 def resolve_workspace(
 ) -> WorkspacePaths:
@@ -316,9 +320,10 @@ def run_sensing(
 
     elif equipment == "webcam":
 
-        raise NotImplementedError(
-            "Webcam timber segmentation "
-            "has not been implemented yet."
+        operation = (
+            EWoodXTimberSegmentationAngetube(
+                workspace=workspace
+            )
         )
 
     else:
