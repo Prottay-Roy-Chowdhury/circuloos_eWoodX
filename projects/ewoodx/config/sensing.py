@@ -84,6 +84,165 @@ ARDUCAM_MARKER_OUTER_CORNERS = {
     3: 3,
 }
 
+
+# ---------------------------------------------------------------------
+# Angetube acquisition
+# ---------------------------------------------------------------------
+
+ANGETUBE_CAMERA_INDEX = 1
+
+ANGETUBE_IMAGE_WIDTH = 3840
+ANGETUBE_IMAGE_HEIGHT = 2160
+
+ANGETUBE_CAMERA_FPS = 30
+
+ANGETUBE_CAMERA_FOURCC = (
+    "MJPG"
+)
+
+
+# ---------------------------------------------------------------------
+# Angetube camera control
+# ---------------------------------------------------------------------
+
+ANGETUBE_FOCUS_MODE = (
+    "manual"
+)
+
+ANGETUBE_FOCUS_VALUE = (
+    390
+)
+
+ANGETUBE_EXPOSURE_MODE = (
+    "auto"
+)
+
+ANGETUBE_EXPOSURE_VALUE = (
+    -5
+)
+
+ANGETUBE_BRIGHTNESS = (
+    24
+)
+
+ANGETUBE_CONTRAST = (
+    30
+)
+
+ANGETUBE_SATURATION = (
+    32
+)
+
+ANGETUBE_SHARPNESS = (
+    32
+)
+
+ANGETUBE_GAIN = (
+    0
+)
+
+ANGETUBE_BACKLIGHT_COMPENSATION = (
+    0
+)
+
+ANGETUBE_WHITE_BALANCE_MODE = (
+    "auto"
+)
+
+ANGETUBE_WHITE_BALANCE_TEMPERATURE = (
+    5000
+)
+
+ANGETUBE_DIGITAL_ZOOM = (
+    1.80
+)
+
+
+# ---------------------------------------------------------------------
+# Angetube intrinsic calibration
+# ---------------------------------------------------------------------
+
+ANGETUBE_CHECKERBOARD_INNER_CORNERS = (
+    13,
+    8,
+)
+
+ANGETUBE_CHECKERBOARD_SQUARE_SIZE_MM = (
+    20.0
+)
+
+ANGETUBE_CALIBRATION_MODEL = (
+    "fisheye"
+)
+
+ANGETUBE_FISHEYE_BALANCE = (
+    0.0
+)
+
+ANGETUBE_FISHEYE_FOV_SCALE = (
+    1.0
+)
+
+ANGETUBE_FISHEYE_CHECK_COND = (
+    True
+)
+
+ANGETUBE_FISHEYE_RECOMPUTE_EXTRINSIC = (
+    True
+)
+
+ANGETUBE_FISHEYE_FIX_SKEW = (
+    True
+)
+
+
+# ---------------------------------------------------------------------
+# Angetube calibration directory layout
+# ---------------------------------------------------------------------
+
+ANGETUBE_CALIBRATION_LAYOUT = {
+    "intrinsic": (
+        "webcam_angetube/intrinsic"
+    ),
+    "intrinsic_images": (
+        "webcam_angetube/intrinsic/images"
+    ),
+    "extrinsic": (
+        "webcam_angetube/extrinsic"
+    ),
+    "extrinsic_images": (
+        "webcam_angetube/extrinsic/images"
+    ),
+}
+
+
+# ---------------------------------------------------------------------
+# Angetube extrinsic calibration
+# ---------------------------------------------------------------------
+
+ANGETUBE_ARUCO_DICTIONARY = (
+    "DICT_4X4_50"
+)
+
+ANGETUBE_MARKER_SIZE_MM = (
+    100.0
+)
+
+ANGETUBE_MARKER_WORLD_POSITIONS_MM = {
+    1: (0.0, 0.0),
+    0: (776.0, 0.0),
+    2: (0.0, 440.0),
+    3: (776.0, 440.0),
+}
+
+ANGETUBE_MARKER_OUTER_CORNERS = {
+    0: 0,
+    1: 1,
+    2: 2,
+    3: 3,
+}
+
+
 # ---------------------------------------------------------------------
 # eWoodX sensing workspace
 # ---------------------------------------------------------------------
@@ -127,4 +286,12 @@ TIMBER_THICKNESS_MM = (
 
 ARDUCAM_CAMERA_HEIGHT_MM = (
     1750.0
+)
+
+# ---------------------------------------------------------------------
+# Angetube measurement setup
+# ---------------------------------------------------------------------
+
+ANGETUBE_CAMERA_HEIGHT_MM = (
+    1620.0
 )
