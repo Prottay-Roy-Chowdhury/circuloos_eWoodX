@@ -171,6 +171,7 @@ class EWoodXTimberSegmentationArducam:
         Start continuous live timber sensing.
 
         SPACE = save current valid result
+        T = change timber thickness
         ENTER / ESC = exit
         """
 
@@ -205,6 +206,18 @@ class EWoodXTimberSegmentationArducam:
         )
 
         print(
+            "[eWoodX] T = change timber thickness"
+        )
+
+        print(
+            "[eWoodX] Current timber thickness:"
+        )
+
+        print(
+            f"{self.timber_thickness_mm:.1f} mm"
+        )
+
+        print(
             "[eWoodX] ENTER / ESC = exit"
         )
 
@@ -232,7 +245,76 @@ class EWoodXTimberSegmentationArducam:
                     & 0xFF
                 )
 
-                if key == 32:
+                if key in (
+                    ord("t"),
+                    ord("T"),
+                ):
+
+                    print()
+
+                    print(
+                        "[eWoodX] Current timber thickness:"
+                    )
+
+                    print(
+                        f"{self.timber_thickness_mm:.1f} mm"
+                    )
+
+                    try:
+
+                        value = (
+                            input(
+                                "Enter timber thickness in mm: "
+                            )
+                            .strip()
+                        )
+
+                        new_thickness = float(
+                            value
+                        )
+
+                        if new_thickness < 0:
+
+                            print(
+                                "[eWoodX] Timber thickness "
+                                "cannot be negative."
+                            )
+
+                            continue
+
+                        if (
+                            new_thickness
+                            >= self.camera_height_mm
+                        ):
+
+                            print(
+                                "[eWoodX] Timber thickness "
+                                "must be smaller than "
+                                "the camera height."
+                            )
+
+                            continue
+
+                        self.timber_thickness_mm = (
+                            new_thickness
+                        )
+
+                        print(
+                            "[eWoodX] Timber thickness set to:"
+                        )
+
+                        print(
+                            f"{self.timber_thickness_mm:.1f} mm"
+                        )
+
+                    except (ValueError, EOFError):
+
+                        print(
+                            "[eWoodX] Invalid thickness. "
+                            "Value unchanged."
+                        )
+
+                elif key == 32:
 
                     if not result["valid"]:
 
@@ -1950,11 +2032,14 @@ class EWoodXTimberSegmentationArducam:
 
         cv2.putText(
             preview,
-            "SPACE = save | ENTER/ESC = exit",
+            (
+                "SPACE = save | "
+                f"T = thickness ({self.timber_thickness_mm:.1f} mm) | "
+                "ENTER/ESC = exit"
+            ),
             (
                 30,
-                preview.shape[0]
-                - 30,
+                preview.shape[0] - 30,
             ),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.7,
@@ -2076,11 +2161,14 @@ class EWoodXTimberSegmentationArducam:
 
         cv2.putText(
             preview,
-            "SPACE = save | ENTER/ESC = exit",
+            (
+                "SPACE = save | "
+                f"T = thickness ({self.timber_thickness_mm:.1f} mm) | "
+                "ENTER/ESC = exit"
+            ),
             (
                 30,
-                preview.shape[0]
-                - 30,
+                preview.shape[0] - 30,
             ),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.7,
