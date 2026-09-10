@@ -83,3 +83,48 @@ ARDUCAM_MARKER_OUTER_CORNERS = {
     2: 2,
     3: 3,
 }
+
+# ---------------------------------------------------------------------
+# eWoodX sensing workspace
+# ---------------------------------------------------------------------
+
+EWOODX_SENSING_WORKSPACE_LAYOUT = {
+    "images": (
+        "sensing/images"
+    ),
+    "masks": (
+        "sensing/masks"
+    ),
+    "overlays": (
+        "sensing/overlays"
+    ),
+    "measurements": (
+        "sensing/measurements"
+    ),
+}
+
+
+# ---------------------------------------------------------------------
+# eWoodX timber segmentation
+# ---------------------------------------------------------------------
+
+TIMBER_MIN_CONTOUR_AREA_PX = (
+    5000
+)
+
+TIMBER_CONTOUR_APPROX_FACTOR = (
+    0.004
+)
+
+TIMBER_THICKNESS_MM = (
+    0.0
+)
+
+
+# ---------------------------------------------------------------------
+# Arducam measurement setup
+# ---------------------------------------------------------------------
+
+ARDUCAM_CAMERA_HEIGHT_MM = (
+    1750.0
+)
