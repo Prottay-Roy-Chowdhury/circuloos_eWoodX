@@ -202,15 +202,73 @@ def resolve_workspace(
             )
 
 
+def resolve_sensing_equipment(
+) -> str:
+    """
+    Interactively choose which sensing equipment
+    is used for the current sensing process.
+    """
+
+    while True:
+
+        print()
+        print(
+            "Sensing equipment:"
+        )
+
+        print(
+            "[1] Arducam"
+        )
+
+        print(
+            "[2] Webcam"
+        )
+
+        print(
+            "[3] Exit"
+        )
+
+        choice = (
+            input(
+                "Select: "
+            )
+            .strip()
+        )
+
+        if choice == "1":
+
+            return "arducam"
+
+        elif choice == "2":
+
+            return "webcam"
+
+        elif choice == "3":
+
+            raise SystemExit(
+                0
+            )
+
+        else:
+
+            print(
+                "[eWoodX] Invalid selection."
+            )
+
+
 def run_sensing(
     workspace: WorkspacePaths | None = None,
+    equipment: str | None = None,
 ) -> None:
     """
     Start the eWoodX sensing process.
 
-    A workspace may be supplied programmatically
-    later by orchestration. If none is supplied,
-    interactive workspace selection is used.
+    Workspace and sensing equipment may be
+    supplied programmatically later by
+    orchestration.
+
+    If either is not supplied, the corresponding
+    interactive selection is used.
     """
 
     if workspace is None:
@@ -218,6 +276,18 @@ def run_sensing(
         workspace = (
             resolve_workspace()
         )
+
+    if equipment is None:
+
+        equipment = (
+            resolve_sensing_equipment()
+        )
+
+    equipment = (
+        equipment
+        .strip()
+        .lower()
+    )
 
     print()
     print(
@@ -228,11 +298,35 @@ def run_sensing(
         workspace.root
     )
 
-    operation = (
-        EWoodXTimberSegmentationArducam(
-            workspace=workspace
-        )
+    print(
+        "[eWoodX] Sensing equipment:"
     )
+
+    print(
+        equipment
+    )
+
+    if equipment == "arducam":
+
+        operation = (
+            EWoodXTimberSegmentationArducam(
+                workspace=workspace
+            )
+        )
+
+    elif equipment == "webcam":
+
+        raise NotImplementedError(
+            "Webcam timber segmentation "
+            "has not been implemented yet."
+        )
+
+    else:
+
+        raise ValueError(
+            "Unknown sensing equipment: "
+            f"{equipment}"
+        )
 
     operation.run()
 
