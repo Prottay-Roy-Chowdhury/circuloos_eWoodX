@@ -1041,6 +1041,148 @@ class AngetubeIntrinsicCalibration:
             ),
         )
 
+    def save_text_report(
+        self,
+        file_path: str | Path,
+    ) -> None:
+        """
+        Save a human-readable intrinsic
+        calibration report.
+        """
+
+        if not self.is_calibrated:
+            raise RuntimeError(
+                "Camera calibration "
+                "is not available."
+            )
+
+        path = Path(
+            file_path
+        )
+
+        path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        width, height = (
+            self.image_size
+        )
+
+        model_name = (
+            "OpenCV Fisheye"
+            if self.is_fisheye
+            else "Standard Pinhole"
+        )
+
+        with path.open(
+            "w",
+            encoding="utf-8",
+        ) as file:
+
+            file.write(
+                "ANGETUBE INTRINSIC CALIBRATION REPORT\n"
+            )
+
+            file.write(
+                "=" * 50
+                + "\n\n"
+            )
+
+            file.write(
+                "Calibration model: "
+                f"{model_name}\n"
+            )
+
+            file.write(
+                "Checkerboard inner corners: "
+                f"{self.checkerboard_inner_corners}\n"
+            )
+
+            file.write(
+                "Checkerboard square size: "
+                f"{self.square_size_mm:.6f} mm\n"
+            )
+
+            file.write(
+                "Accepted images: "
+                f"{self.accepted_images}\n"
+            )
+
+            file.write(
+                "Total images: "
+                f"{self.total_images}\n"
+            )
+
+            file.write(
+                "Image resolution: "
+                f"{width} x {height}\n"
+            )
+
+            file.write(
+                "RMS reprojection error: "
+                f"{self.rms_error:.8f} px\n"
+            )
+
+            if self.is_fisheye:
+
+                file.write(
+                    "Fisheye balance: "
+                    f"{self.fisheye_balance}\n"
+                )
+
+                file.write(
+                    "Fisheye FOV scale: "
+                    f"{self.fisheye_fov_scale}\n"
+                )
+
+                file.write(
+                    "Fisheye CHECK_COND: "
+                    f"{self.fisheye_check_cond}\n"
+                )
+
+                file.write(
+                    "Fisheye RECOMPUTE_EXTRINSIC: "
+                    f"{self.fisheye_recompute_extrinsic}\n"
+                )
+
+                file.write(
+                    "Fisheye FIX_SKEW: "
+                    f"{self.fisheye_fix_skew}\n"
+                )
+
+            file.write(
+                "\nCamera Matrix (K):\n"
+            )
+
+            file.write(
+                np.array2string(
+                    self.camera_matrix,
+                    precision=8,
+                    suppress_small=True,
+                )
+            )
+
+            file.write(
+                "\n\n"
+            )
+
+            file.write(
+                "Distortion Coefficients (D):\n"
+            )
+
+            file.write(
+                np.array2string(
+                    self.dist_coeffs.ravel(),
+                    precision=8,
+                    suppress_small=True,
+                )
+            )
+
+            file.write(
+                "\n"
+            )
+
     # -----------------------------------------------------------------
     # Load
     # -----------------------------------------------------------------

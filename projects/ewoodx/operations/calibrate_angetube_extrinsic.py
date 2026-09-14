@@ -427,12 +427,39 @@ class EWoodXAngetubeExtrinsicCalibration:
             self.output_file
         )
 
+        report_file = (
+            self.output_file
+            .with_suffix(
+                ".txt"
+            )
+        )
+
+        self.extrinsic_calibration.save_text_report(
+            file_path=(
+                report_file
+            ),
+            pixel_points=(
+                self.pixel_points
+            ),
+            world_points_mm=(
+                self.world_points_mm
+            ),
+        )
+
         print(
             "[eWoodX] Extrinsic calibration saved:"
         )
 
         print(
             self.output_file
+        )
+
+        print(
+            "[eWoodX] Extrinsic calibration report saved:"
+        )
+
+        print(
+            report_file
         )
 
         print(

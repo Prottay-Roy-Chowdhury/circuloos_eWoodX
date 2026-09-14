@@ -336,12 +336,31 @@ class EWoodXArducamIntrinsicCalibration:
             self.output_file
         )
 
+        report_file = (
+            self.output_file
+            .with_suffix(
+                ".txt"
+            )
+        )
+
+        self.calibration.save_text_report(
+            report_file
+        )
+
         print(
             "[eWoodX] Intrinsic calibration saved:"
         )
 
         print(
             self.output_file
+        )
+
+        print(
+            "[eWoodX] Intrinsic calibration report saved:"
+        )
+
+        print(
+            report_file
         )
 
         return self.calibration

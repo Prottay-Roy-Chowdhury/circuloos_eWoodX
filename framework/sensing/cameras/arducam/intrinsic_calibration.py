@@ -270,6 +270,114 @@ class ArducamIntrinsicCalibration:
             square_size_mm=self.square_size_mm,
         )
 
+        def save_text_report(
+            self,
+            file_path: str | Path,
+        ) -> None:
+            """
+            Save a human-readable intrinsic
+            calibration report.
+            """
+
+            if not self.is_calibrated:
+                raise RuntimeError(
+                    "Camera calibration is not available."
+                )
+
+            path = Path(
+                file_path
+            )
+
+            path.parent.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+
+            width, height = (
+                self.image_size
+            )
+
+            with path.open(
+                "w",
+                encoding="utf-8",
+            ) as file:
+
+                file.write(
+                    "ARDUCAM INTRINSIC CALIBRATION REPORT\n"
+                )
+
+                file.write(
+                    "=" * 50
+                    + "\n\n"
+                )
+
+                file.write(
+                    "Calibration model: "
+                    "Standard Pinhole\n"
+                )
+
+                file.write(
+                    "Checkerboard inner corners: "
+                    f"{self.checkerboard_inner_corners}\n"
+                )
+
+                file.write(
+                    "Checkerboard square size: "
+                    f"{self.square_size_mm:.6f} mm\n"
+                )
+
+                file.write(
+                    "Accepted images: "
+                    f"{self.accepted_images}\n"
+                )
+
+                file.write(
+                    "Total images: "
+                    f"{self.total_images}\n"
+                )
+
+                file.write(
+                    "Image resolution: "
+                    f"{width} x {height}\n"
+                )
+
+                file.write(
+                    "RMS reprojection error: "
+                    f"{self.rms_error:.8f} px\n\n"
+                )
+
+                file.write(
+                    "Camera Matrix (K):\n"
+                )
+
+                file.write(
+                    np.array2string(
+                        self.camera_matrix,
+                        precision=8,
+                        suppress_small=True,
+                    )
+                )
+
+                file.write(
+                    "\n\n"
+                )
+
+                file.write(
+                    "Distortion Coefficients (D):\n"
+                )
+
+                file.write(
+                    np.array2string(
+                        self.dist_coeffs.ravel(),
+                        precision=8,
+                        suppress_small=True,
+                    )
+                )
+
+                file.write(
+                    "\n"
+                )
+
     @classmethod
     def load(
         cls,

@@ -133,6 +133,126 @@ class ArducamExtrinsicCalibration:
             homography=self.homography,
         )
 
+    def save_text_report(
+        self,
+        file_path: str | Path,
+        pixel_points=None,
+        world_points_mm=None,
+    ) -> None:
+        """
+        Save a human-readable planar
+        extrinsic calibration report.
+        """
+
+        if not self.is_calibrated:
+            raise RuntimeError(
+                "Extrinsic calibration has not "
+                "been computed."
+            )
+
+        path = Path(
+            file_path
+        )
+
+        path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        with path.open(
+            "w",
+            encoding="utf-8",
+        ) as file:
+
+            file.write(
+                "ARDUCAM EXTRINSIC CALIBRATION REPORT\n"
+            )
+
+            file.write(
+                "=" * 50
+                + "\n\n"
+            )
+
+            if pixel_points is not None:
+
+                pixel_points = np.asarray(
+                    pixel_points,
+                    dtype=np.float32,
+                )
+
+                file.write(
+                    "Pixel points:\n"
+                )
+
+                file.write(
+                    np.array2string(
+                        pixel_points,
+                        precision=4,
+                        suppress_small=True,
+                    )
+                )
+
+                file.write(
+                    "\n\n"
+                )
+
+            if world_points_mm is not None:
+
+                world_points_mm = np.asarray(
+                    world_points_mm,
+                    dtype=np.float32,
+                )
+
+                file.write(
+                    "World points (mm):\n"
+                )
+
+                file.write(
+                    np.array2string(
+                        world_points_mm,
+                        precision=4,
+                        suppress_small=True,
+                    )
+                )
+
+                file.write(
+                    "\n\n"
+                )
+
+            file.write(
+                "Homography Matrix (H):\n"
+            )
+
+            file.write(
+                np.array2string(
+                    self.homography,
+                    precision=10,
+                    suppress_small=True,
+                )
+            )
+
+            file.write(
+                "\n\n"
+            )
+
+            if (
+                self.reprojection_errors_mm
+                is not None
+            ):
+
+                file.write(
+                    "Reprojection Errors (mm):\n"
+                )
+
+                for index, error in enumerate(
+                    self.reprojection_errors_mm
+                ):
+
+                    file.write(
+                        f"Point {index}: "
+                        f"{float(error):.8f} mm\n"
+                    )
+
     @classmethod
     def load(
         cls,
