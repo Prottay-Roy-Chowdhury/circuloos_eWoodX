@@ -43,6 +43,13 @@ from projects.ewoodx.config import (
 
     ANGETUBE_BRIGHTNESS,
     ANGETUBE_CONTRAST,
+    ANGETUBE_SATURATION,
+    ANGETUBE_SHARPNESS,
+    ANGETUBE_GAIN,
+    ANGETUBE_BACKLIGHT_COMPENSATION,
+
+    ANGETUBE_WHITE_BALANCE_MODE,
+    ANGETUBE_WHITE_BALANCE_TEMPERATURE,
 
     ANGETUBE_DIGITAL_ZOOM,
 )
@@ -112,6 +119,30 @@ class EWoodXAngetubeCameraTuning:
 
         self.contrast = int(
             ANGETUBE_CONTRAST
+        )
+
+        self.saturation = int(
+            ANGETUBE_SATURATION
+        )
+
+        self.sharpness = int(
+            ANGETUBE_SHARPNESS
+        )
+
+        self.gain = int(
+            ANGETUBE_GAIN
+        )
+
+        self.backlight_compensation = int(
+            ANGETUBE_BACKLIGHT_COMPENSATION
+        )
+
+        self.white_balance_mode = (
+            ANGETUBE_WHITE_BALANCE_MODE
+        )
+
+        self.white_balance_temperature = int(
+            ANGETUBE_WHITE_BALANCE_TEMPERATURE
         )
 
         self.digital_zoom = float(
@@ -758,6 +789,157 @@ class EWoodXAngetubeCameraTuning:
             self.contrast,
             print_status=False,
         )
+
+        self._apply_fixed_settings()
+
+
+    def _apply_fixed_settings(
+        self,
+    ) -> None:
+        """
+        Apply the fixed Angetube image settings
+        used by calibration and sensing.
+        """
+
+        if self.capture is not None:
+
+            properties = [
+                (
+                    cv2.CAP_PROP_SATURATION,
+                    self.saturation,
+                ),
+                (
+                    cv2.CAP_PROP_SHARPNESS,
+                    self.sharpness,
+                ),
+                (
+                    cv2.CAP_PROP_GAIN,
+                    self.gain,
+                ),
+                (
+                    cv2.CAP_PROP_BACKLIGHT,
+                    self.backlight_compensation,
+                ),
+            ]
+
+            for property_id, value in properties:
+
+                self.capture.set(
+                    property_id,
+                    float(value),
+                )
+
+            mode = (
+                self.white_balance_mode
+                .strip()
+                .lower()
+            )
+
+            if mode == "auto":
+
+                self.capture.set(
+                    cv2.CAP_PROP_AUTO_WB,
+                    1,
+                )
+
+            elif mode == "manual":
+
+                self.capture.set(
+                    cv2.CAP_PROP_AUTO_WB,
+                    0,
+                )
+
+                self.capture.set(
+                    cv2.CAP_PROP_WB_TEMPERATURE,
+                    float(
+                        self.white_balance_temperature
+                    ),
+                )
+
+        if self.controller is not None:
+
+            fixed_properties = {
+                "saturation": (
+                    self.saturation
+                ),
+                "sharpness": (
+                    self.sharpness
+                ),
+                "gain": (
+                    self.gain
+                ),
+                "backlight_compensation": (
+                    self.backlight_compensation
+                ),
+            }
+
+            for name, value in (
+                fixed_properties.items()
+            ):
+
+                try:
+
+                    if hasattr(
+                        self.controller,
+                        name,
+                    ):
+
+                        setattr(
+                            self.controller,
+                            name,
+                            value,
+                        )
+
+                except Exception:
+                    pass
+
+            try:
+
+                if (
+                    self.white_balance_mode
+                    == "auto"
+                ):
+
+                    if hasattr(
+                        self.controller,
+                        "white_balance_mode",
+                    ):
+
+                        self.controller.white_balance_mode = (
+                            "auto"
+                        )
+
+                    elif hasattr(
+                        self.controller,
+                        "_set_property_auto",
+                    ):
+
+                        self.controller._set_property_auto(
+                            "white_balance"
+                        )
+
+                else:
+
+                    if hasattr(
+                        self.controller,
+                        "white_balance_mode",
+                    ):
+
+                        self.controller.white_balance_mode = (
+                            "manual"
+                        )
+
+                    if hasattr(
+                        self.controller,
+                        "white_balance",
+                    ):
+
+                        self.controller.white_balance = (
+                            self.white_balance_temperature
+                        )
+
+            except Exception:
+                pass
 
     # -----------------------------------------------------------------
     # Focus
