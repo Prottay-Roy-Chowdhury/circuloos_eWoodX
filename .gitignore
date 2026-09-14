@@ -25,3 +25,5 @@
 venv/
 
 .last_workspace
+
+!**/calibration_data/**

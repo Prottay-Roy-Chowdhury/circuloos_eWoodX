@@ -285,6 +285,21 @@ class EWoodXTimberSegmentationAngetube:
             "[eWoodX] ENTER / ESC = exit"
         )
 
+        window_name = (
+            "eWoodX Timber Segmentation"
+        )
+
+        cv2.namedWindow(
+            window_name,
+            cv2.WINDOW_NORMAL,
+        )
+
+        cv2.resizeWindow(
+            window_name,
+            3840,
+            2160,
+        )
+
         try:
 
             while True:
@@ -297,6 +312,16 @@ class EWoodXTimberSegmentationAngetube:
                     self.process_frame(
                         frame
                     )
+                )
+
+                cv2.imshow(
+                    window_name,
+                    result["preview"],
+                )
+
+                key = (
+                    cv2.waitKey(1)
+                    & 0xFF
                 )
 
                 cv2.imshow(

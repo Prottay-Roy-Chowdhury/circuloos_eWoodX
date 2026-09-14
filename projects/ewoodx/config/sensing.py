@@ -89,7 +89,7 @@ ARDUCAM_MARKER_OUTER_CORNERS = {
 # Angetube acquisition
 # ---------------------------------------------------------------------
 
-ANGETUBE_CAMERA_INDEX = 1
+ANGETUBE_CAMERA_INDEX = 0
 
 ANGETUBE_IMAGE_WIDTH = 3840
 ANGETUBE_IMAGE_HEIGHT = 2160
@@ -110,7 +110,7 @@ ANGETUBE_FOCUS_MODE = (
 )
 
 ANGETUBE_FOCUS_VALUE = (
-    390
+    400
 )
 
 ANGETUBE_EXPOSURE_MODE = (
@@ -122,11 +122,11 @@ ANGETUBE_EXPOSURE_VALUE = (
 )
 
 ANGETUBE_BRIGHTNESS = (
-    24
+    9
 )
 
 ANGETUBE_CONTRAST = (
-    30
+    32
 )
 
 ANGETUBE_SATURATION = (

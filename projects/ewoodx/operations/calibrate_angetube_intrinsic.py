@@ -259,6 +259,21 @@ class EWoodXAngetubeIntrinsicCalibration:
             existing_images
         )
 
+        window_name = (
+            "eWoodX Angetube Intrinsic Calibration"
+        )
+
+        cv2.namedWindow(
+            window_name,
+            cv2.WINDOW_NORMAL,
+        )
+
+        cv2.resizeWindow(
+            window_name,
+            3840,
+            2160,
+        )
+
         try:
 
             while True:
@@ -268,7 +283,7 @@ class EWoodXAngetubeIntrinsicCalibration:
                 )
 
                 cv2.imshow(
-                    "eWoodX Angetube Intrinsic Calibration",
+                    window_name,
                     frame,
                 )
 

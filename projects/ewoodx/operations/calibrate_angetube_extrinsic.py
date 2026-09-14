@@ -249,6 +249,21 @@ class EWoodXAngetubeExtrinsicCalibration:
             "[eWoodX] ENTER = exit"
         )
 
+        window_name = (
+            "eWoodX Angetube Extrinsic Calibration"
+        )
+
+        cv2.namedWindow(
+            window_name,
+            cv2.WINDOW_NORMAL,
+        )
+
+        cv2.resizeWindow(
+            window_name,
+            3840,
+            2160,
+        )
+
         try:
 
             while True:
@@ -258,7 +273,7 @@ class EWoodXAngetubeExtrinsicCalibration:
                 )
 
                 cv2.imshow(
-                    "eWoodX Angetube Extrinsic Calibration",
+                    window_name,
                     frame,
                 )
 
@@ -350,6 +365,30 @@ class EWoodXAngetubeExtrinsicCalibration:
             image_path
         )
 
+        # -------------------------------------------------------------
+        # Debug: detect markers in RAW captured image
+        # -------------------------------------------------------------
+
+        raw_markers = (
+            self.detector.detect(
+                image
+            )
+        )
+
+        print(
+            "[eWoodX] Marker IDs in RAW image:"
+        )
+
+        print(
+            sorted(
+                raw_markers.keys()
+            )
+        )
+
+        # -------------------------------------------------------------
+        # Load intrinsic calibration and undistort
+        # -------------------------------------------------------------
+
         self._load_intrinsic_calibration()
 
         undistorted_image = (
@@ -358,9 +397,48 @@ class EWoodXAngetubeExtrinsicCalibration:
             )
         )
 
+        debug_undistorted_file = (
+            self.calibration_image
+            .parent
+            / "workspace_undistorted.jpg"
+        )
+
+        cv2.imwrite(
+            str(
+                debug_undistorted_file
+            ),
+            undistorted_image,
+            [
+                cv2.IMWRITE_JPEG_QUALITY,
+                100,
+            ],
+        )
+
+        print(
+            "[eWoodX] Undistorted debug image saved:"
+        )
+
+        print(
+            debug_undistorted_file
+        )
+
+        # -------------------------------------------------------------
+        # Detect markers after undistortion
+        # -------------------------------------------------------------
+
         self.detected_markers = (
             self.detector.detect(
                 undistorted_image
+            )
+        )
+
+        print(
+            "[eWoodX] Marker IDs after UNDISTORTION:"
+        )
+
+        print(
+            sorted(
+                self.detected_markers.keys()
             )
         )
 
