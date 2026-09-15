@@ -15,6 +15,11 @@ from framework.workspace.domain_manager import (
     DomainPaths,
 )
 
+from framework.workspace.entry_manager import (
+    EntryManager,
+    EntryPaths,
+)
+
 
 __all__ = [
     "DirectoryManager",
@@ -23,4 +28,6 @@ __all__ = [
     "load_workspace",
     "DomainManager",
     "DomainPaths",
+    "EntryManager",
+    "EntryPaths",
 ]

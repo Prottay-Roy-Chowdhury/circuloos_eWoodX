@@ -143,16 +143,21 @@ class DomainManager:
         domain_name: str,
     ) -> bool:
         """
-        Return True if the domain exists.
+        Return True if a managed domain exists.
         """
 
-        path = self.domain_path(
+        root = self.domain_path(
             domain_name
         )
 
+        manifest = (
+            root
+            / DOMAIN_MANIFEST_FILE
+        )
+
         return (
-            path.exists()
-            and path.is_dir()
+            root.is_dir()
+            and manifest.is_file()
         )
 
     def ensure_domain(
