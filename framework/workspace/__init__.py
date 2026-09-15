@@ -10,10 +10,17 @@ from framework.workspace.workspace_manager import (
     load_workspace,
 )
 
+from framework.workspace.domain_manager import (
+    DomainManager,
+    DomainPaths,
+)
+
 
 __all__ = [
     "DirectoryManager",
     "WorkspacePaths",
     "init_workspace",
     "load_workspace",
+    "DomainManager",
+    "DomainPaths",
 ]
