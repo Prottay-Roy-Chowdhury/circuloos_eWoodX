@@ -18,6 +18,20 @@ ENTITY_MANIFEST_FILE = "entity.json"
 INDEX_DIRECTORY = "index"
 ENTITY_DATABASE_FILE = "entities.db"
 
+SQLITE_TYPES = {
+    "TEXT",
+    "INTEGER",
+    "REAL",
+    "BLOB",
+}
+
+BASE_COLUMNS = {
+    "entity_id",
+    "entity_type",
+    "relative_path",
+    "created_at",
+}
+
 
 @dataclass(frozen=True)
 class EntityPaths:
@@ -43,6 +57,7 @@ class EntityManager:
         self,
         workspace: WorkspacePaths,
         entry: EntryPaths,
+        index_schema: dict[str, str] | None = None,
     ) -> None:
 
         if not isinstance(
@@ -64,6 +79,10 @@ class EntityManager:
         self.workspace = workspace
         self.entry = entry
 
+        self.index_schema = self._validate_index_schema(
+            index_schema or {}
+        )
+
         self.index_directory = (
             self.workspace.root
             / INDEX_DIRECTORY
@@ -76,11 +95,76 @@ class EntityManager:
 
         self._initialize_database()
 
+    def _validate_index_schema(
+        self,
+        index_schema: dict[str, str],
+    ) -> dict[str, str]:
+        """
+        Validate project-defined SQLite index columns.
+        """
+
+        if not isinstance(
+            index_schema,
+            dict,
+        ):
+            raise TypeError(
+                "index_schema must be a dictionary."
+            )
+
+        validated: dict[str, str] = {}
+
+        for column_name, column_type in index_schema.items():
+
+            if not isinstance(
+                column_name,
+                str,
+            ):
+                raise TypeError(
+                    "SQLite column names must be strings."
+                )
+
+            column_name = column_name.strip()
+
+            if not column_name:
+                raise ValueError(
+                    "SQLite column names cannot be empty."
+                )
+
+            if not column_name.isidentifier():
+                raise ValueError(
+                    f"Invalid SQLite column name: {column_name}"
+                )
+
+            if column_name in BASE_COLUMNS:
+                raise ValueError(
+                    f"Project index schema cannot redefine "
+                    f"framework column: {column_name}"
+                )
+
+            if not isinstance(
+                column_type,
+                str,
+            ):
+                raise TypeError(
+                    "SQLite column types must be strings."
+                )
+
+            column_type = column_type.strip().upper()
+
+            if column_type not in SQLITE_TYPES:
+                raise ValueError(
+                    f"Unsupported SQLite type: {column_type}"
+                )
+
+            validated[column_name] = column_type
+
+        return validated
+
     def _initialize_database(
         self,
     ) -> None:
         """
-        Create the entity database and table if necessary.
+        Create and evolve the entity database if necessary.
         """
 
         self.index_directory.mkdir(
@@ -102,6 +186,41 @@ class EntityManager:
                 )
                 """
             )
+
+            existing_columns = {
+                row[1]: row[2].upper()
+                for row in connection.execute(
+                    "PRAGMA table_info(entities)"
+                ).fetchall()
+            }
+
+            for (
+                column_name,
+                column_type,
+            ) in self.index_schema.items():
+
+                if column_name in existing_columns:
+
+                    existing_type = (
+                        existing_columns[column_name]
+                    )
+
+                    if existing_type != column_type:
+                        raise ValueError(
+                            f"SQLite column '{column_name}' "
+                            f"already exists as {existing_type}, "
+                            f"but project schema requests "
+                            f"{column_type}."
+                        )
+
+                    continue
+
+                connection.execute(
+                    f"""
+                    ALTER TABLE entities
+                    ADD COLUMN {column_name} {column_type}
+                    """
+                )
 
     def _validate_entity_id(
         self,
