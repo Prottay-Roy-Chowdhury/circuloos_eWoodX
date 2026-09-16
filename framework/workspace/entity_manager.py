@@ -341,13 +341,54 @@ class EntityManager:
         entity_type: str,
         root: Path,
         created_at: str,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """
         Register an entity in the workspace index.
+
+        Project-defined metadata fields are indexed only
+        when they are declared in index_schema.
         """
 
         relative_path = root.relative_to(
             self.workspace.root
+        )
+
+        metadata = metadata or {}
+
+        columns = [
+            "entity_id",
+            "entity_type",
+            "relative_path",
+            "created_at",
+        ]
+
+        values = [
+            entity_id,
+            entity_type,
+            relative_path.as_posix(),
+            created_at,
+        ]
+
+        for column_name in self.index_schema:
+
+            columns.append(
+                column_name
+            )
+
+            values.append(
+                metadata.get(
+                    column_name
+                )
+            )
+
+        placeholders = ", ".join(
+            "?"
+            for _ in values
+        )
+
+        column_names = ", ".join(
+            columns
         )
 
         with sqlite3.connect(
@@ -355,21 +396,15 @@ class EntityManager:
         ) as connection:
 
             connection.execute(
-                """
+                f"""
                 INSERT INTO entities (
-                    entity_id,
-                    entity_type,
-                    relative_path,
-                    created_at
+                    {column_names}
                 )
-                VALUES (?, ?, ?, ?)
+                VALUES (
+                    {placeholders}
+                )
                 """,
-                (
-                    entity_id,
-                    entity_type,
-                    relative_path.as_posix(),
-                    created_at,
-                ),
+                values,
             )
 
     def create_entity(
@@ -424,6 +459,7 @@ class EntityManager:
             entity_type=entity_type,
             root=root,
             created_at=data["created_at"],
+            metadata=metadata,
         )
 
         return EntityPaths(
@@ -554,6 +590,107 @@ class EntityManager:
                     """,
                     (entity_type,),
                 ).fetchall()
+
+        entities: list[EntityPaths] = []
+
+        for entity_id, relative_path in rows:
+
+            root = (
+                self.workspace.root
+                / relative_path
+            ).resolve()
+
+            manifest = (
+                root
+                / ENTITY_MANIFEST_FILE
+            )
+
+            if (
+                root.is_dir()
+                and manifest.is_file()
+            ):
+                entities.append(
+                    EntityPaths(
+                        root=root,
+                        entity_id=entity_id,
+                        manifest=manifest,
+                    )
+                )
+
+        return entities
+
+    def query_entities(
+        self,
+        filters: dict[str, Any] | None = None,
+    ) -> list[EntityPaths]:
+        """
+        Query registered entities using exact-match filters.
+
+        Filters may reference framework-owned columns or
+        project-defined indexed columns.
+        """
+
+        filters = filters or {}
+
+        if not isinstance(
+            filters,
+            dict,
+        ):
+            raise TypeError(
+                "filters must be a dictionary."
+            )
+
+        allowed_columns = (
+            BASE_COLUMNS
+            | set(self.index_schema)
+        )
+
+        conditions: list[str] = []
+        values: list[Any] = []
+
+        for column_name, value in filters.items():
+
+            if column_name not in allowed_columns:
+                raise ValueError(
+                    f"Column is not indexed: {column_name}"
+                )
+
+            if value is None:
+                conditions.append(
+                    f"{column_name} IS NULL"
+                )
+            else:
+                conditions.append(
+                    f"{column_name} = ?"
+                )
+
+                values.append(
+                    value
+                )
+
+        query = """
+            SELECT
+                entity_id,
+                relative_path
+            FROM entities
+        """
+
+        if conditions:
+            query += (
+                " WHERE "
+                + " AND ".join(conditions)
+            )
+
+        query += " ORDER BY entity_id"
+
+        with sqlite3.connect(
+            self.database_path
+        ) as connection:
+
+            rows = connection.execute(
+                query,
+                values,
+            ).fetchall()
 
         entities: list[EntityPaths] = []
 
