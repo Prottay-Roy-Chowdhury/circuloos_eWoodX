@@ -20,6 +20,11 @@ from framework.workspace.entry_manager import (
     EntryPaths,
 )
 
+from framework.workspace.entity_manager import (
+    EntityManager,
+    EntityPaths,
+)
+
 
 __all__ = [
     "DirectoryManager",
@@ -30,4 +35,6 @@ __all__ = [
     "DomainPaths",
     "EntryManager",
     "EntryPaths",
+    "EntityManager",
+    "EntityPaths",
 ]
