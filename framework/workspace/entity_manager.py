@@ -25,6 +25,15 @@ SQLITE_TYPES = {
     "BLOB",
 }
 
+QUERY_OPERATORS = {
+    "eq": "=",
+    "ne": "!=",
+    "gt": ">",
+    "gte": ">=",
+    "lt": "<",
+    "lte": "<=",
+}
+
 BASE_COLUMNS = {
     "entity_id",
     "entity_type",
@@ -1025,25 +1034,98 @@ class EntityManager:
         conditions: list[str] = []
         values: list[Any] = []
 
-        for column_name, value in filters.items():
+        for column_name, filter_value in filters.items():
 
             if column_name not in allowed_columns:
                 raise ValueError(
                     f"Column is not indexed: {column_name}"
                 )
 
-            if value is None:
-                conditions.append(
-                    f"{column_name} IS NULL"
-                )
-            else:
-                conditions.append(
-                    f"{column_name} = ?"
+            # ------------------------------------------
+            # Existing simple syntax:
+            #
+            # {"color": "brown"}
+            # {"thickness_mm": None}
+            # ------------------------------------------
+
+            if not isinstance(
+                filter_value,
+                dict,
+            ):
+                if filter_value is None:
+                    conditions.append(
+                        f"{column_name} IS NULL"
+                    )
+                else:
+                    conditions.append(
+                        f"{column_name} = ?"
+                    )
+                    values.append(
+                        filter_value
+                    )
+
+                continue
+
+            # ------------------------------------------
+            # Comparison syntax:
+            #
+            # {"length_mm": {"gte": 1200}}
+            # ------------------------------------------
+
+            if len(filter_value) != 1:
+                raise ValueError(
+                    f"Comparison filter for '{column_name}' "
+                    "must contain exactly one operator."
                 )
 
-                values.append(
-                    value
+            operator_name, comparison_value = next(
+                iter(filter_value.items())
+            )
+
+            operator_name = str(
+                operator_name
+            ).strip().lower()
+
+            if operator_name not in QUERY_OPERATORS:
+                raise ValueError(
+                    f"Unsupported query operator: "
+                    f"{operator_name}"
                 )
+
+            sql_operator = QUERY_OPERATORS[
+                operator_name
+            ]
+
+            # ------------------------------------------
+            # NULL only makes sense with eq / ne.
+            # ------------------------------------------
+
+            if comparison_value is None:
+
+                if operator_name == "eq":
+                    conditions.append(
+                        f"{column_name} IS NULL"
+                    )
+                    continue
+
+                if operator_name == "ne":
+                    conditions.append(
+                        f"{column_name} IS NOT NULL"
+                    )
+                    continue
+
+                raise ValueError(
+                    f"Operator '{operator_name}' cannot "
+                    "be used with None."
+                )
+
+            conditions.append(
+                f"{column_name} {sql_operator} ?"
+            )
+
+            values.append(
+                comparison_value
+            )
 
         query = """
             SELECT
