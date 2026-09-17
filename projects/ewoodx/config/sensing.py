@@ -9,6 +9,11 @@ EWOODX_PROJECT_ROOT = Path(
     __file__
 ).resolve().parents[1]
 
+EWOODX_REPOSITORY_ROOT = (
+    EWOODX_PROJECT_ROOT
+    .parents[1]
+)
+
 CALIBRATION_ROOT = (
     EWOODX_PROJECT_ROOT
     / "calibration_data"
@@ -244,22 +249,14 @@ ANGETUBE_MARKER_OUTER_CORNERS = {
 
 
 # ---------------------------------------------------------------------
-# eWoodX sensing workspace
+# eWoodX workspace
 # ---------------------------------------------------------------------
 
-EWOODX_SENSING_WORKSPACE_LAYOUT = {
-    "images": (
-        "sensing/images"
-    ),
-    "masks": (
-        "sensing/masks"
-    ),
-    "overlays": (
-        "sensing/overlays"
-    ),
-    "measurements": (
-        "sensing/measurements"
-    ),
+EWOODX_WORKSPACE_LAYOUT = {
+    "index": "index",
+    "sensing": "sensing",
+    "design": "design",
+    "robot_control": "robot_control",
 }
 
 

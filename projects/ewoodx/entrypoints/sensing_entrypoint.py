@@ -19,8 +19,8 @@ from framework.workspace import (
 )
 
 from projects.ewoodx.config import (
-    EWOODX_PROJECT_ROOT,
-    EWOODX_SENSING_WORKSPACE_LAYOUT,
+    EWOODX_REPOSITORY_ROOT,
+    EWOODX_WORKSPACE_LAYOUT,
 )
 
 from projects.ewoodx.operations.timber_segmentation_arducam import (
@@ -85,7 +85,7 @@ def resolve_workspace(
                 workspace = (
                     load_workspace(
                         project_root=(
-                            EWOODX_PROJECT_ROOT
+                            EWOODX_REPOSITORY_ROOT
                         )
                     )
                 )
@@ -122,7 +122,7 @@ def resolve_workspace(
                 workspace = (
                     load_workspace(
                         project_root=(
-                            EWOODX_PROJECT_ROOT
+                            EWOODX_REPOSITORY_ROOT
                         ),
                         workspace_name=(
                             workspace_name
@@ -158,7 +158,7 @@ def resolve_workspace(
                 continue
 
             workspace_path = (
-                EWOODX_PROJECT_ROOT
+                EWOODX_REPOSITORY_ROOT
                 / "workspaces"
                 / workspace_name
             )
@@ -180,13 +180,13 @@ def resolve_workspace(
             workspace = (
                 init_workspace(
                     project_root=(
-                        EWOODX_PROJECT_ROOT
+                        EWOODX_REPOSITORY_ROOT
                     ),
                     workspace_name=(
                         workspace_name
                     ),
                     layout=(
-                        EWOODX_SENSING_WORKSPACE_LAYOUT
+                        EWOODX_WORKSPACE_LAYOUT
                     ),
                 )
             )

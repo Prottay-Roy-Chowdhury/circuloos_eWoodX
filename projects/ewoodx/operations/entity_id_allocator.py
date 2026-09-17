@@ -45,7 +45,7 @@ class EWoodXEntityIdAllocator:
 
         self.counter_path = (
             self.entity_manager.workspace.root
-            / "project"
+            / "index"
             / COUNTER_FILE
         )
 
