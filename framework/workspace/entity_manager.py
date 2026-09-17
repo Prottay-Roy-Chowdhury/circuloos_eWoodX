@@ -30,6 +30,18 @@ BASE_COLUMNS = {
     "entity_type",
     "relative_path",
     "created_at",
+    "availability_status",
+    "claimed_by",
+}
+
+ENTITY_STATUS_AVAILABLE = "available"
+ENTITY_STATUS_CLAIMED = "claimed"
+ENTITY_STATUS_UNAVAILABLE = "unavailable"
+
+ENTITY_STATUSES = {
+    ENTITY_STATUS_AVAILABLE,
+    ENTITY_STATUS_CLAIMED,
+    ENTITY_STATUS_UNAVAILABLE,
 }
 
 
@@ -182,10 +194,36 @@ class EntityManager:
                     entity_id TEXT PRIMARY KEY,
                     entity_type TEXT NOT NULL,
                     relative_path TEXT NOT NULL,
-                    created_at TEXT NOT NULL
+                    created_at TEXT NOT NULL,
+                    availability_status TEXT NOT NULL DEFAULT 'available',
+                    claimed_by TEXT
                 )
                 """
             )
+
+            existing_columns = {
+                row[1]: row[2].upper()
+                for row in connection.execute(
+                    "PRAGMA table_info(entities)"
+                ).fetchall()
+            }
+
+            if "availability_status" not in existing_columns:
+                connection.execute(
+                    """
+                    ALTER TABLE entities
+                    ADD COLUMN availability_status
+                    TEXT NOT NULL DEFAULT 'available'
+                    """
+                )
+
+            if "claimed_by" not in existing_columns:
+                connection.execute(
+                    """
+                    ALTER TABLE entities
+                    ADD COLUMN claimed_by TEXT
+                    """
+                )
 
             existing_columns = {
                 row[1]: row[2].upper()
@@ -322,6 +360,8 @@ class EntityManager:
             "created_at": datetime.now().isoformat(
                 timespec="seconds"
             ),
+            "availability_status": ENTITY_STATUS_AVAILABLE,
+            "claimed_by": None,
             "metadata": metadata or {},
         }
 
@@ -361,6 +401,8 @@ class EntityManager:
             "entity_type",
             "relative_path",
             "created_at",
+            "availability_status",
+            "claimed_by",
         ]
 
         values = [
@@ -368,6 +410,8 @@ class EntityManager:
             entity_type,
             relative_path.as_posix(),
             created_at,
+            ENTITY_STATUS_AVAILABLE,
+            None,
         ]
 
         for column_name in self.index_schema:
@@ -406,6 +450,123 @@ class EntityManager:
                 """,
                 values,
             )
+
+    def _set_availability_state(
+        self,
+        entity_id: str,
+        availability_status: str,
+        claimed_by: str | None,
+    ) -> EntityPaths:
+        """
+        Persist entity availability state to the canonical
+        manifest and workspace SQLite index.
+        """
+
+        entity = self.load_entity(
+            entity_id
+        )
+
+        with entity.manifest.open(
+            "r",
+            encoding="utf-8",
+        ) as file:
+            data = json.load(
+                file
+            )
+
+        data["availability_status"] = (
+            availability_status
+        )
+
+        data["claimed_by"] = (
+            claimed_by
+        )
+
+        temporary_path = (
+            entity.manifest.with_suffix(
+                entity.manifest.suffix + ".tmp"
+            )
+        )
+
+        with temporary_path.open(
+            "w",
+            encoding="utf-8",
+        ) as file:
+            json.dump(
+                data,
+                file,
+                ensure_ascii=False,
+                indent=2,
+            )
+
+        temporary_path.replace(
+            entity.manifest
+        )
+
+        with sqlite3.connect(
+            self.database_path
+        ) as connection:
+
+            connection.execute(
+                """
+                UPDATE entities
+                SET
+                    availability_status = ?,
+                    claimed_by = ?
+                WHERE entity_id = ?
+                """,
+                (
+                    availability_status,
+                    claimed_by,
+                    entity_id,
+                ),
+            )
+
+        return entity
+
+    def _write_availability_manifest(
+        self,
+        entity: EntityPaths,
+        availability_status: str,
+        claimed_by: str | None,
+    ) -> None:
+
+        with entity.manifest.open(
+            "r",
+            encoding="utf-8",
+        ) as file:
+            data = json.load(
+                file
+            )
+
+        data["availability_status"] = (
+            availability_status
+        )
+
+        data["claimed_by"] = (
+            claimed_by
+        )
+
+        temporary_path = (
+            entity.manifest.with_suffix(
+                entity.manifest.suffix + ".tmp"
+            )
+        )
+
+        with temporary_path.open(
+            "w",
+            encoding="utf-8",
+        ) as file:
+            json.dump(
+                data,
+                file,
+                ensure_ascii=False,
+                indent=2,
+            )
+
+        temporary_path.replace(
+            entity.manifest
+        )
 
     def create_entity(
         self,
@@ -467,6 +628,66 @@ class EntityManager:
             entity_id=entity_id,
             manifest=manifest,
         )
+
+    def claim_entity(
+        self,
+        entity_id: str,
+        claimed_by: str,
+    ) -> EntityPaths:
+        """
+        Claim an available entity for a consumer.
+        """
+
+        entity_id = self._validate_entity_id(
+            entity_id
+        )
+
+        claimed_by = str(
+            claimed_by or ""
+        ).strip()
+
+        if not claimed_by:
+            raise ValueError(
+                "claimed_by cannot be empty."
+            )
+
+        with sqlite3.connect(
+            self.database_path
+        ) as connection:
+
+            cursor = connection.execute(
+                """
+                UPDATE entities
+                SET
+                    availability_status = ?,
+                    claimed_by = ?
+                WHERE entity_id = ?
+                AND availability_status = ?
+                """,
+                (
+                    ENTITY_STATUS_CLAIMED,
+                    claimed_by,
+                    entity_id,
+                    ENTITY_STATUS_AVAILABLE,
+                ),
+            )
+
+            if cursor.rowcount != 1:
+                raise RuntimeError(
+                    f"Entity is not available: {entity_id}"
+                )
+
+        entity = self.load_entity(
+            entity_id
+        )
+
+        self._write_availability_manifest(
+            entity=entity,
+            availability_status=ENTITY_STATUS_CLAIMED,
+            claimed_by=claimed_by,
+        )
+
+        return entity
 
     def exists(
         self,
@@ -618,6 +839,162 @@ class EntityManager:
                 )
 
         return entities
+
+    def release_entity(
+        self,
+        entity_id: str,
+        claimed_by: str,
+    ) -> EntityPaths:
+        """
+        Release a claimed entity back to available state.
+        """
+
+        entity_id = self._validate_entity_id(
+            entity_id
+        )
+
+        claimed_by = str(
+            claimed_by or ""
+        ).strip()
+
+        if not claimed_by:
+            raise ValueError(
+                "claimed_by cannot be empty."
+            )
+
+        with sqlite3.connect(
+            self.database_path
+        ) as connection:
+
+            cursor = connection.execute(
+                """
+                UPDATE entities
+                SET
+                    availability_status = ?,
+                    claimed_by = NULL
+                WHERE entity_id = ?
+                AND availability_status = ?
+                AND claimed_by = ?
+                """,
+                (
+                    ENTITY_STATUS_AVAILABLE,
+                    entity_id,
+                    ENTITY_STATUS_CLAIMED,
+                    claimed_by,
+                ),
+            )
+
+            if cursor.rowcount != 1:
+                raise RuntimeError(
+                    "Entity is not claimed by this consumer."
+                )
+
+        entity = self.load_entity(
+            entity_id
+        )
+
+        self._write_availability_manifest(
+            entity=entity,
+            availability_status=ENTITY_STATUS_AVAILABLE,
+            claimed_by=None,
+        )
+
+        return entity
+
+    def mark_unavailable(
+        self,
+        entity_id: str,
+        claimed_by: str,
+    ) -> EntityPaths:
+        """
+        Mark a claimed entity as unavailable.
+        """
+
+        entity_id = self._validate_entity_id(
+            entity_id
+        )
+
+        claimed_by = str(
+            claimed_by or ""
+        ).strip()
+
+        if not claimed_by:
+            raise ValueError(
+                "claimed_by cannot be empty."
+            )
+
+        with sqlite3.connect(
+            self.database_path
+        ) as connection:
+
+            cursor = connection.execute(
+                """
+                UPDATE entities
+                SET
+                    availability_status = ?,
+                    claimed_by = NULL
+                WHERE entity_id = ?
+                AND availability_status = ?
+                AND claimed_by = ?
+                """,
+                (
+                    ENTITY_STATUS_UNAVAILABLE,
+                    entity_id,
+                    ENTITY_STATUS_CLAIMED,
+                    claimed_by,
+                ),
+            )
+
+            if cursor.rowcount != 1:
+                raise RuntimeError(
+                    "Entity is not claimed by this consumer."
+                )
+
+        entity = self.load_entity(
+            entity_id
+        )
+
+        self._write_availability_manifest(
+            entity=entity,
+            availability_status=ENTITY_STATUS_UNAVAILABLE,
+            claimed_by=None,
+        )
+
+        return entity
+
+    def set_availability(
+        self,
+        entity_id: str,
+        availability_status: str,
+    ) -> EntityPaths:
+        """
+        Explicitly override entity availability.
+
+        Intended for administrative, testing, and simulation use.
+        """
+
+        entity_id = self._validate_entity_id(
+            entity_id
+        )
+
+        availability_status = str(
+            availability_status or ""
+        ).strip().lower()
+
+        if availability_status not in {
+            ENTITY_STATUS_AVAILABLE,
+            ENTITY_STATUS_UNAVAILABLE,
+        }:
+            raise ValueError(
+                "Manual availability must be "
+                "'available' or 'unavailable'."
+            )
+
+        return self._set_availability_state(
+            entity_id=entity_id,
+            availability_status=availability_status,
+            claimed_by=None,
+        )
 
     def query_entities(
         self,
