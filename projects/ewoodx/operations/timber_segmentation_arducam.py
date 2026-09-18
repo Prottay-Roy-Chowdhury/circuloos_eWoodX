@@ -1,6 +1,8 @@
 from pathlib import Path
 import sys
 import json
+import queue
+import threading
 
 import cv2
 import numpy as np
@@ -143,6 +145,103 @@ class EWoodXTimberSegmentationArducam:
             ArducamExtrinsicCalibration()
         )
 
+        self.command_queue = (
+            queue.Queue()
+        )
+
+        self.stop_input_thread = (
+            threading.Event()
+        )
+
+    def _terminal_input_loop(
+        self,
+    ) -> None:
+        """
+        Read interactive commands from the terminal.
+
+        Commands:
+        S = save current timber
+        T = change timber thickness
+        Q = quit
+        """
+
+        while not self.stop_input_thread.is_set():
+
+            try:
+
+                command = (
+                    input(
+                        "\nCommand [S=save, T=thickness, Q=quit]: "
+                    )
+                    .strip()
+                    .lower()
+                )
+
+            except EOFError:
+
+                self.command_queue.put(
+                    ("quit", None)
+                )
+
+                return
+
+            if command == "t":
+
+                print(
+                    f"[eWoodX] Current timber thickness: "
+                    f"{self.timber_thickness_mm:.1f} mm"
+                )
+
+                try:
+
+                    value = (
+                        input(
+                            "Enter timber thickness in mm: "
+                        )
+                        .strip()
+                    )
+
+                    new_thickness = float(
+                        value
+                    )
+
+                except (ValueError, EOFError):
+
+                    print(
+                        "[eWoodX] Invalid thickness. "
+                        "Value unchanged."
+                    )
+
+                    continue
+
+                self.command_queue.put(
+                    (
+                        "thickness",
+                        new_thickness,
+                    )
+                )
+
+            elif command == "s":
+
+                self.command_queue.put(
+                    ("save", None)
+                )
+
+            elif command == "q":
+
+                self.command_queue.put(
+                    ("quit", None)
+                )
+
+                return
+
+            elif command:
+
+                print(
+                    "[eWoodX] Unknown command. "
+                    "Use S, T or Q."
+                )
+
     # -----------------------------------------------------------------
     # Main operation
     # -----------------------------------------------------------------
@@ -153,9 +252,10 @@ class EWoodXTimberSegmentationArducam:
         """
         Start continuous live timber sensing.
 
-        SPACE = save current valid result
+        Terminal commands:
+        S = save current valid result
         T = change timber thickness
-        ENTER / ESC = exit
+        Q = exit
         """
 
         print(
@@ -185,11 +285,19 @@ class EWoodXTimberSegmentationArducam:
         )
 
         print(
-            "[eWoodX] SPACE = save current timber"
+            "[eWoodX] Terminal commands:"
+        )
+
+        print(
+            "[eWoodX] S = save current timber"
         )
 
         print(
             "[eWoodX] T = change timber thickness"
+        )
+
+        print(
+            "[eWoodX] Q = exit"
         )
 
         print(
@@ -200,9 +308,31 @@ class EWoodXTimberSegmentationArducam:
             f"{self.timber_thickness_mm:.1f} mm"
         )
 
-        print(
-            "[eWoodX] ENTER / ESC = exit"
+        window_name = (
+            "eWoodX Timber Segmentation"
         )
+
+        cv2.namedWindow(
+            window_name,
+            cv2.WINDOW_NORMAL,
+        )
+
+        cv2.resizeWindow(
+            window_name,
+            3840,
+            2160,
+        )
+
+        input_thread = (
+            threading.Thread(
+                target=(
+                    self._terminal_input_loop
+                ),
+                daemon=True,
+            )
+        )
+
+        input_thread.start()
 
         try:
 
@@ -219,64 +349,49 @@ class EWoodXTimberSegmentationArducam:
                 )
 
                 cv2.imshow(
-                    "eWoodX Timber Segmentation",
+                    window_name,
                     result["preview"],
                 )
 
-                key = (
-                    cv2.waitKey(1)
-                    & 0xFF
-                )
+                cv2.waitKey(1)
 
-                if key in (
-                    ord("t"),
-                    ord("T"),
-                ):
+                try:
 
-                    print()
-
-                    print(
-                        "[eWoodX] Current timber thickness:"
+                    command, value = (
+                        self.command_queue
+                        .get_nowait()
                     )
 
-                    print(
-                        f"{self.timber_thickness_mm:.1f} mm"
+                except queue.Empty:
+
+                    command = None
+                    value = None
+
+                if command == "thickness":
+
+                    new_thickness = float(
+                        value
                     )
 
-                    try:
+                    if new_thickness < 0:
 
-                        value = (
-                            input(
-                                "Enter timber thickness in mm: "
-                            )
-                            .strip()
+                        print(
+                            "[eWoodX] Timber thickness "
+                            "cannot be negative."
                         )
 
-                        new_thickness = float(
-                            value
+                    elif (
+                        new_thickness
+                        >= self.camera_height_mm
+                    ):
+
+                        print(
+                            "[eWoodX] Timber thickness "
+                            "must be smaller than "
+                            "the camera height."
                         )
 
-                        if new_thickness < 0:
-
-                            print(
-                                "[eWoodX] Timber thickness "
-                                "cannot be negative."
-                            )
-
-                            continue
-
-                        if (
-                            new_thickness
-                            >= self.camera_height_mm
-                        ):
-
-                            print(
-                                "[eWoodX] Timber thickness "
-                                "must be smaller than "
-                                "the camera height."
-                            )
-
-                            continue
+                    else:
 
                         self.timber_thickness_mm = (
                             new_thickness
@@ -290,14 +405,7 @@ class EWoodXTimberSegmentationArducam:
                             f"{self.timber_thickness_mm:.1f} mm"
                         )
 
-                    except (ValueError, EOFError):
-
-                        print(
-                            "[eWoodX] Invalid thickness. "
-                            "Value unchanged."
-                        )
-
-                elif key == 32:
+                elif command == "save":
 
                     if not result["valid"]:
 
@@ -306,17 +414,13 @@ class EWoodXTimberSegmentationArducam:
                             "is not valid. Nothing saved."
                         )
 
-                        continue
+                    else:
 
-                    self._save_outputs(
-                        result
-                    )
+                        self._save_outputs(
+                            result
+                        )
 
-                elif key in (
-                    10,
-                    13,
-                    27,
-                ):
+                elif command == "quit":
 
                     print(
                         "[eWoodX] Sensing stopped."
@@ -325,6 +429,8 @@ class EWoodXTimberSegmentationArducam:
                     break
 
         finally:
+
+            self.stop_input_thread.set()
 
             self.camera.close()
 
@@ -2016,9 +2122,11 @@ class EWoodXTimberSegmentationArducam:
         cv2.putText(
             preview,
             (
-                "SPACE = save | "
-                f"T = thickness ({self.timber_thickness_mm:.1f} mm) | "
-                "ENTER/ESC = exit"
+                "COMMAND LINE CONTROLS | "
+                "S = Save current timber | "
+                "T = Change timber thickness | "
+                f"Thickness: {self.timber_thickness_mm:.1f} mm | "
+                "Q = Quit"
             ),
             (
                 30,
@@ -2145,9 +2253,11 @@ class EWoodXTimberSegmentationArducam:
         cv2.putText(
             preview,
             (
-                "SPACE = save | "
-                f"T = thickness ({self.timber_thickness_mm:.1f} mm) | "
-                "ENTER/ESC = exit"
+                "COMMAND LINE CONTROLS | "
+                "S = Save current timber | "
+                "T = Change timber thickness | "
+                f"Thickness: {self.timber_thickness_mm:.1f} mm | "
+                "Q = Quit"
             ),
             (
                 30,
