@@ -331,7 +331,7 @@ class EWoodXTimberSegmentationAngetube:
         )
 
         print(
-            self.workspace.root
+            self.entity_manager.workspace.root
         )
 
         print(

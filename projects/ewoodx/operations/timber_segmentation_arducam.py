@@ -24,7 +24,7 @@ from framework.sensing import (
 )
 
 from framework.workspace import (
-    WorkspacePaths,
+    EntityManager,
 )
 
 from projects.ewoodx.config import (
@@ -38,8 +38,13 @@ from projects.ewoodx.config import (
     TIMBER_THICKNESS_MM,
     TIMBER_MIN_CONTOUR_AREA_PX,
     TIMBER_CONTOUR_APPROX_FACTOR,
+    TIMBER_ENTITY_TYPE,
+    TIMBER_ID_PREFIX,
 )
 
+from projects.ewoodx.operations.entity_id_allocator import (
+    EWoodXEntityIdAllocator,
+)
 
 class EWoodXTimberSegmentationArducam:
     """
@@ -63,33 +68,15 @@ class EWoodXTimberSegmentationArducam:
 
     def __init__(
         self,
-        workspace: WorkspacePaths,
+        entity_manager: EntityManager,
         intrinsic_file: Path | None = None,
     ) -> None:
 
-        self.workspace = workspace
+        self.entity_manager = entity_manager
 
-        self.image_dir = (
-            workspace.directory(
-                "images"
-            )
-        )
-
-        self.mask_dir = (
-            workspace.directory(
-                "masks"
-            )
-        )
-
-        self.overlay_dir = (
-            workspace.directory(
-                "overlays"
-            )
-        )
-
-        self.measurement_dir = (
-            workspace.directory(
-                "measurements"
+        self.entity_id_allocator = (
+            EWoodXEntityIdAllocator(
+                entity_manager=entity_manager
             )
         )
 
@@ -156,10 +143,6 @@ class EWoodXTimberSegmentationArducam:
             ArducamExtrinsicCalibration()
         )
 
-        self.capture_index = (
-            self._find_next_capture_index()
-        )
-
     # -----------------------------------------------------------------
     # Main operation
     # -----------------------------------------------------------------
@@ -184,7 +167,7 @@ class EWoodXTimberSegmentationArducam:
         )
 
         print(
-            self.workspace.root
+            self.entity_manager.workspace.root
         )
 
         print(
@@ -2190,31 +2173,104 @@ class EWoodXTimberSegmentationArducam:
         self,
         result,
     ) -> None:
+        """
+        Create a persistent Timber entity and save
+        the accepted sensing outputs inside it.
+        """
 
-        timber_id = (
-            f"timber_"
-            f"{self.capture_index:04d}"
+        measurement = dict(
+            result[
+                "measurement"
+            ]
         )
 
+        # -------------------------------------------------------------
+        # Allocate persistent project Timber identity.
+        # -------------------------------------------------------------
+
+        timber_id = (
+            self.entity_id_allocator.allocate(
+                entity_type=(
+                    TIMBER_ENTITY_TYPE
+                ),
+                prefix=(
+                    TIMBER_ID_PREFIX
+                ),
+            )
+        )
+
+        # -------------------------------------------------------------
+        # Project stable sensing properties into
+        # the persistent Timber entity.
+        # -------------------------------------------------------------
+
+        entity_metadata = {
+            "color": (
+                measurement[
+                    "color_hex"
+                ]
+            ),
+            "length_mm": (
+                measurement[
+                    "length_mm"
+                ]
+            ),
+            "width_mm": (
+                measurement[
+                    "width_mm"
+                ]
+            ),
+            "thickness_mm": (
+                measurement[
+                    "timber_thickness_mm"
+                ]
+            ),
+            "area_mm2": (
+                measurement[
+                    "surface_area_mm2"
+                ]
+            ),
+        }
+
+        timber = (
+            self.entity_manager.create_entity(
+                entity_id=timber_id,
+                entity_type=(
+                    TIMBER_ENTITY_TYPE
+                ),
+                metadata=(
+                    entity_metadata
+                ),
+            )
+        )
+
+        # -------------------------------------------------------------
+        # Entity-local sensing artifacts.
+        # -------------------------------------------------------------
+
         image_file = (
-            self.image_dir
-            / f"{timber_id}.jpg"
+            timber.root
+            / "image.jpg"
         )
 
         mask_file = (
-            self.mask_dir
-            / f"{timber_id}_mask.png"
+            timber.root
+            / "mask.png"
         )
 
         overlay_file = (
-            self.overlay_dir
-            / f"{timber_id}_overlay.jpg"
+            timber.root
+            / "overlay.jpg"
         )
 
         measurement_file = (
-            self.measurement_dir
-            / f"{timber_id}.json"
+            timber.root
+            / "measurements.json"
         )
+
+        # -------------------------------------------------------------
+        # Image.
+        # -------------------------------------------------------------
 
         image_success = (
             cv2.imwrite(
@@ -2238,6 +2294,10 @@ class EWoodXTimberSegmentationArducam:
                 f"{image_file}"
             )
 
+        # -------------------------------------------------------------
+        # Mask.
+        # -------------------------------------------------------------
+
         if result["mask"] is not None:
 
             mask_success = (
@@ -2257,6 +2317,10 @@ class EWoodXTimberSegmentationArducam:
                     "Could not save mask: "
                     f"{mask_file}"
                 )
+
+        # -------------------------------------------------------------
+        # Overlay.
+        # -------------------------------------------------------------
 
         overlay_success = (
             cv2.imwrite(
@@ -2280,11 +2344,9 @@ class EWoodXTimberSegmentationArducam:
                 f"{overlay_file}"
             )
 
-        measurement = dict(
-            result[
-                "measurement"
-            ]
-        )
+        # -------------------------------------------------------------
+        # Complete sensing measurement.
+        # -------------------------------------------------------------
 
         measurement[
             "timber_id"
@@ -2302,8 +2364,9 @@ class EWoodXTimberSegmentationArducam:
             encoding="utf-8",
         )
 
+        print()
         print(
-            "[eWoodX] Timber saved:"
+            "[eWoodX] Timber entity created:"
         )
 
         print(
@@ -2311,12 +2374,18 @@ class EWoodXTimberSegmentationArducam:
         )
 
         print(
-            f"  Image: {image_file}"
+            f"  Entity: {timber.root}"
         )
 
         print(
-            f"  Mask: {mask_file}"
+            f"  Image: {image_file}"
         )
+
+        if result["mask"] is not None:
+
+            print(
+                f"  Mask: {mask_file}"
+            )
 
         print(
             f"  Overlay: {overlay_file}"
@@ -2324,41 +2393,4 @@ class EWoodXTimberSegmentationArducam:
 
         print(
             f"  Measurement: {measurement_file}"
-        )
-
-        self.capture_index += 1
-
-    def _find_next_capture_index(
-        self,
-    ) -> int:
-
-        highest_index = 0
-
-        for file_path in (
-            self.measurement_dir.glob(
-                "timber_*.json"
-            )
-        ):
-
-            suffix = (
-                file_path.stem
-                .replace(
-                    "timber_",
-                    "",
-                    1,
-                )
-            )
-
-            if suffix.isdigit():
-
-                highest_index = max(
-                    highest_index,
-                    int(
-                        suffix
-                    ),
-                )
-
-        return (
-            highest_index
-            + 1
         )
