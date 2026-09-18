@@ -587,11 +587,7 @@ class EWoodXSensingEntrypoint:
         )
 
         # ---------------------------------------------------------
-        # Temporary operation construction.
-        #
-        # The segmentation operations still use the old workspace
-        # artifact layout. Their persistence interface will be
-        # migrated to EntityManager in the next step.
+        # Sensing operation
         # ---------------------------------------------------------
 
         if equipment == "arducam":
