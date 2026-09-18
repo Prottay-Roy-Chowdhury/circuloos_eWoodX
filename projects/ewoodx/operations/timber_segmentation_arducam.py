@@ -62,10 +62,11 @@ class EWoodXTimberSegmentationArducam:
     - calculates geometry and colour
     - displays the result live
 
-    SPACE accepts the current processed frame and
-    saves its outputs into the active workspace.
+    Terminal commands:
 
-    ENTER / ESC exits the operation.
+    S = save the current valid timber
+    T = change timber thickness
+    Q = exit the operation
     """
 
     def __init__(

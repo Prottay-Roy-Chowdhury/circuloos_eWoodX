@@ -82,10 +82,11 @@ class EWoodXTimberSegmentationAngetube:
     - calculates geometry and colour
     - displays the result live
 
-    SPACE accepts the current processed frame and
-    saves its outputs into the active workspace.
+    Terminal commands:
 
-    ENTER / ESC exits the operation.
+    S = save the current valid timber
+    T = change timber thickness
+    Q = exit the operation
     """
 
     def __init__(
@@ -317,9 +318,11 @@ class EWoodXTimberSegmentationAngetube:
         """
         Start continuous live timber sensing.
 
-        SPACE = save current valid result
+        Terminal commands:
+
+        S = save the current valid timber
         T = change timber thickness
-        ENTER / ESC = exit
+        Q = exit the operation
         """
 
         print(

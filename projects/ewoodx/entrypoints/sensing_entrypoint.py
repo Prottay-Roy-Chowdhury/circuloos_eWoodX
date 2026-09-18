@@ -291,10 +291,20 @@ class EWoodXSensingEntrypoint:
             domain=sensing_domain
         )
 
+        entry_allocator = (
+            EWoodXEntryAllocator(
+                entry_manager=entry_manager
+            )
+        )
+
         while True:
 
             entries = (
                 entry_manager.list_entries()
+            )
+
+            latest_entry = (
+                entry_allocator.latest_entry()
             )
 
             print()
@@ -302,11 +312,7 @@ class EWoodXSensingEntrypoint:
                 "Sensing entry:"
             )
 
-            if entries:
-
-                latest_entry = (
-                    entries[-1]
-                )
+            if latest_entry is not None:
 
                 print(
                     "[1] Continue latest entry: "
@@ -314,8 +320,6 @@ class EWoodXSensingEntrypoint:
                 )
 
             else:
-
-                latest_entry = None
 
                 print(
                     "[1] Continue latest entry "
@@ -417,16 +421,8 @@ class EWoodXSensingEntrypoint:
 
             elif choice == "3":
 
-                allocator = (
-                    EWoodXEntryAllocator(
-                        entry_manager=(
-                            entry_manager
-                        )
-                    )
-                )
-
                 entry_name = (
-                    allocator.allocate()
+                    entry_allocator.allocate()
                 )
 
                 entry = (

@@ -100,6 +100,76 @@ class EWoodXEntryAllocator:
         return (
             highest_sequence + 1
         )
+    
+    def latest_entry(
+        self,
+    ):
+        """
+        Return the managed eWoodX entry with the
+        highest sequence number.
+
+        Returns None when no matching eWoodX
+        entries exist.
+        """
+
+        latest_entry = None
+        highest_sequence = 0
+
+        prefix = (
+            f"{ENTRY_NAME_PREFIX}_"
+        )
+
+        for entry in (
+            self.entry_manager.list_entries()
+        ):
+
+            entry_name = (
+                entry.entry_name
+            )
+
+            if not entry_name.startswith(
+                prefix
+            ):
+                continue
+
+            remainder = (
+                entry_name[
+                    len(prefix):
+                ]
+            )
+
+            parts = (
+                remainder.split(
+                    "_",
+                    1,
+                )
+            )
+
+            if len(parts) != 2:
+                continue
+
+            sequence_text = (
+                parts[0]
+            )
+
+            if not sequence_text.isdigit():
+                continue
+
+            sequence = int(
+                sequence_text
+            )
+
+            if sequence > highest_sequence:
+
+                highest_sequence = (
+                    sequence
+                )
+
+                latest_entry = (
+                    entry
+                )
+
+        return latest_entry
 
     def allocate(
         self,
