@@ -59,6 +59,9 @@ from projects.ewoodx.config import (
     TIMBER_THICKNESS_MM,
     TIMBER_MIN_CONTOUR_AREA_PX,
     TIMBER_CONTOUR_APPROX_FACTOR,
+
+    TIMBER_ENTITY_TYPE,
+    TIMBER_ID_PREFIX,
 )
 
 from projects.ewoodx.operations.entity_id_allocator import (
@@ -2344,31 +2347,104 @@ class EWoodXTimberSegmentationAngetube:
         self,
         result,
     ) -> None:
+        """
+        Create a persistent Timber entity and save
+        the accepted sensing outputs inside it.
+        """
 
-        timber_id = (
-            f"timber_"
-            f"{self.capture_index:04d}"
+        measurement = dict(
+            result[
+                "measurement"
+            ]
         )
 
+        # -------------------------------------------------------------
+        # Allocate persistent project Timber identity.
+        # -------------------------------------------------------------
+
+        timber_id = (
+            self.entity_id_allocator.allocate(
+                entity_type=(
+                    TIMBER_ENTITY_TYPE
+                ),
+                prefix=(
+                    TIMBER_ID_PREFIX
+                ),
+            )
+        )
+
+        # -------------------------------------------------------------
+        # Project stable sensing properties into
+        # the persistent Timber entity.
+        # -------------------------------------------------------------
+
+        entity_metadata = {
+            "color": (
+                measurement[
+                    "color_hex"
+                ]
+            ),
+            "length_mm": (
+                measurement[
+                    "length_mm"
+                ]
+            ),
+            "width_mm": (
+                measurement[
+                    "width_mm"
+                ]
+            ),
+            "thickness_mm": (
+                measurement[
+                    "timber_thickness_mm"
+                ]
+            ),
+            "area_mm2": (
+                measurement[
+                    "surface_area_mm2"
+                ]
+            ),
+        }
+
+        timber = (
+            self.entity_manager.create_entity(
+                entity_id=timber_id,
+                entity_type=(
+                    TIMBER_ENTITY_TYPE
+                ),
+                metadata=(
+                    entity_metadata
+                ),
+            )
+        )
+
+        # -------------------------------------------------------------
+        # Entity-local sensing artifacts.
+        # -------------------------------------------------------------
+
         image_file = (
-            self.image_dir
-            / f"{timber_id}.jpg"
+            timber.root
+            / "image.jpg"
         )
 
         mask_file = (
-            self.mask_dir
-            / f"{timber_id}_mask.png"
+            timber.root
+            / "mask.png"
         )
 
         overlay_file = (
-            self.overlay_dir
-            / f"{timber_id}_overlay.jpg"
+            timber.root
+            / "overlay.jpg"
         )
 
         measurement_file = (
-            self.measurement_dir
-            / f"{timber_id}.json"
+            timber.root
+            / "measurements.json"
         )
+
+        # -------------------------------------------------------------
+        # Image.
+        # -------------------------------------------------------------
 
         image_success = (
             cv2.imwrite(
@@ -2392,6 +2468,10 @@ class EWoodXTimberSegmentationAngetube:
                 f"{image_file}"
             )
 
+        # -------------------------------------------------------------
+        # Mask.
+        # -------------------------------------------------------------
+
         if result["mask"] is not None:
 
             mask_success = (
@@ -2411,6 +2491,10 @@ class EWoodXTimberSegmentationAngetube:
                     "Could not save mask: "
                     f"{mask_file}"
                 )
+
+        # -------------------------------------------------------------
+        # Overlay.
+        # -------------------------------------------------------------
 
         overlay_success = (
             cv2.imwrite(
@@ -2434,11 +2518,9 @@ class EWoodXTimberSegmentationAngetube:
                 f"{overlay_file}"
             )
 
-        measurement = dict(
-            result[
-                "measurement"
-            ]
-        )
+        # -------------------------------------------------------------
+        # Complete sensing measurement.
+        # -------------------------------------------------------------
 
         measurement[
             "timber_id"
@@ -2456,8 +2538,9 @@ class EWoodXTimberSegmentationAngetube:
             encoding="utf-8",
         )
 
+        print()
         print(
-            "[eWoodX] Timber saved:"
+            "[eWoodX] Timber entity created:"
         )
 
         print(
@@ -2465,12 +2548,18 @@ class EWoodXTimberSegmentationAngetube:
         )
 
         print(
-            f"  Image: {image_file}"
+            f"  Entity: {timber.root}"
         )
 
         print(
-            f"  Mask: {mask_file}"
+            f"  Image: {image_file}"
         )
+
+        if result["mask"] is not None:
+
+            print(
+                f"  Mask: {mask_file}"
+            )
 
         print(
             f"  Overlay: {overlay_file}"
@@ -2479,5 +2568,3 @@ class EWoodXTimberSegmentationAngetube:
         print(
             f"  Measurement: {measurement_file}"
         )
-
-        self.capture_index += 1
