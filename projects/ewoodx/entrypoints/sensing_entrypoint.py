@@ -14,6 +14,7 @@ sys.path.insert(
 
 from framework.workspace import (
     DomainManager,
+    EntityManager,
     EntryManager,
     EntryPaths,
     WorkspacePaths,
@@ -25,6 +26,7 @@ from projects.ewoodx.config import (
     EWOODX_REPOSITORY_ROOT,
     EWOODX_WORKSPACE_LAYOUT,
     SENSING_DOMAIN,
+    TIMBER_ENTITY_INDEX,
 )
 
 from projects.ewoodx.operations.entry_allocator import (
@@ -545,6 +547,12 @@ class EWoodXSensingEntrypoint:
                 )
             )
 
+        entity_manager = EntityManager(
+            workspace=self.workspace,
+            entry=self.entry,
+            index_schema=TIMBER_ENTITY_INDEX,
+        )
+
         if self.equipment is None:
 
             self.equipment = (
@@ -594,9 +602,7 @@ class EWoodXSensingEntrypoint:
 
             operation = (
                 EWoodXTimberSegmentationArducam(
-                    workspace=(
-                        self.workspace
-                    )
+                    entity_manager=entity_manager
                 )
             )
 
@@ -604,9 +610,7 @@ class EWoodXSensingEntrypoint:
 
             operation = (
                 EWoodXTimberSegmentationAngetube(
-                    workspace=(
-                        self.workspace
-                    )
+                    entity_manager=entity_manager
                 )
             )
 

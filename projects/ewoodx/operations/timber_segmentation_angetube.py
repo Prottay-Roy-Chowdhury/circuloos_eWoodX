@@ -26,7 +26,7 @@ from framework.sensing import (
 )
 
 from framework.workspace import (
-    WorkspacePaths,
+        EntityManager,
 )
 
 from projects.ewoodx.config import (
@@ -61,6 +61,9 @@ from projects.ewoodx.config import (
     TIMBER_CONTOUR_APPROX_FACTOR,
 )
 
+from projects.ewoodx.operations.entity_id_allocator import (
+    EWoodXEntityIdAllocator,
+)
 
 class EWoodXTimberSegmentationAngetube:
     """
@@ -84,33 +87,15 @@ class EWoodXTimberSegmentationAngetube:
 
     def __init__(
         self,
-        workspace: WorkspacePaths,
+        entity_manager: EntityManager,
         intrinsic_file: Path | None = None,
     ) -> None:
+        
+        self.entity_manager = entity_manager
 
-        self.workspace = workspace
-
-        self.image_dir = (
-            workspace.directory(
-                "images"
-            )
-        )
-
-        self.mask_dir = (
-            workspace.directory(
-                "masks"
-            )
-        )
-
-        self.overlay_dir = (
-            workspace.directory(
-                "overlays"
-            )
-        )
-
-        self.measurement_dir = (
-            workspace.directory(
-                "measurements"
+        self.entity_id_allocator = (
+            EWoodXEntityIdAllocator(
+                entity_manager=entity_manager
             )
         )
 
@@ -220,10 +205,6 @@ class EWoodXTimberSegmentationAngetube:
         # for every live frame.
         self.extrinsic_calibration = (
             AngetubeExtrinsicCalibration()
-        )
-
-        self.capture_index = (
-            self._find_next_capture_index()
         )
 
         self.command_queue = (
@@ -2500,38 +2481,3 @@ class EWoodXTimberSegmentationAngetube:
         )
 
         self.capture_index += 1
-
-    def _find_next_capture_index(
-        self,
-    ) -> int:
-
-        highest_index = 0
-
-        for file_path in (
-            self.measurement_dir.glob(
-                "timber_*.json"
-            )
-        ):
-
-            suffix = (
-                file_path.stem
-                .replace(
-                    "timber_",
-                    "",
-                    1,
-                )
-            )
-
-            if suffix.isdigit():
-
-                highest_index = max(
-                    highest_index,
-                    int(
-                        suffix
-                    ),
-                )
-
-        return (
-            highest_index
-            + 1
-        )
