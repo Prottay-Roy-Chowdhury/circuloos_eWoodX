@@ -12,12 +12,6 @@ CALIBRATION_ROOT = (
     / "calibration_data"
 )
 
-CALIBRATION_ROOT = (
-    EWOODX_PROJECT_ROOT
-    / "calibration_data"
-)
-
-
 # ---------------------------------------------------------------------
 # Arducam acquisition
 # ---------------------------------------------------------------------
