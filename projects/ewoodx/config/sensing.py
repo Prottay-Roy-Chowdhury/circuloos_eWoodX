@@ -1,17 +1,15 @@
-from pathlib import Path
+from projects.ewoodx.config.workspace import (
+    EWOODX_PROJECT_ROOT,
+)
 
 
 # ---------------------------------------------------------------------
-# eWoodX project paths
+# eWoodX sensing paths
 # ---------------------------------------------------------------------
 
-EWOODX_PROJECT_ROOT = Path(
-    __file__
-).resolve().parents[1]
-
-EWOODX_REPOSITORY_ROOT = (
+CALIBRATION_ROOT = (
     EWOODX_PROJECT_ROOT
-    .parents[1]
+    / "calibration_data"
 )
 
 CALIBRATION_ROOT = (
@@ -246,19 +244,6 @@ ANGETUBE_MARKER_OUTER_CORNERS = {
     2: 2,
     3: 3,
 }
-
-
-# ---------------------------------------------------------------------
-# eWoodX workspace
-# ---------------------------------------------------------------------
-
-EWOODX_WORKSPACE_LAYOUT = {
-    "index": "index",
-    "sensing": "sensing",
-    "design": "design",
-    "robot_control": "robot_control",
-}
-
 
 # ---------------------------------------------------------------------
 # eWoodX timber segmentation
