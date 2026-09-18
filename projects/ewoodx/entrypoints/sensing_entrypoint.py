@@ -13,6 +13,9 @@ sys.path.insert(
 
 
 from framework.workspace import (
+    DomainManager,
+    EntryManager,
+    EntryPaths,
     WorkspacePaths,
     init_workspace,
     load_workspace,
@@ -21,6 +24,11 @@ from framework.workspace import (
 from projects.ewoodx.config import (
     EWOODX_REPOSITORY_ROOT,
     EWOODX_WORKSPACE_LAYOUT,
+    SENSING_DOMAIN,
+)
+
+from projects.ewoodx.operations.entry_allocator import (
+    EWoodXEntryAllocator,
 )
 
 from projects.ewoodx.operations.timber_segmentation_arducam import (
@@ -32,95 +40,148 @@ from projects.ewoodx.operations.timber_segmentation_angetube import (
 )
 
 
-def resolve_workspace(
-) -> WorkspacePaths:
+class EWoodXSensingEntrypoint:
     """
-    Interactively choose the workspace used
-    by the current eWoodX sensing process.
+    Start and coordinate one eWoodX sensing process.
+
+    Runtime context may be supplied programmatically
+    by project-level orchestration or resolved
+    interactively for manual execution.
     """
 
-    while True:
+    def __init__(
+        self,
+        workspace: WorkspacePaths | None = None,
+        entry: EntryPaths | None = None,
+        equipment: str | None = None,
+    ) -> None:
 
-        print()
-        print(
-            "eWoodX Sensing"
-        )
-
-        print(
-            "=============="
-        )
-
-        print()
-        print(
-            "Workspace:"
-        )
-
-        print(
-            "[1] Use last workspace"
-        )
-
-        print(
-            "[2] Open workspace by name"
-        )
-
-        print(
-            "[3] Create new workspace"
-        )
-
-        print(
-            "[4] Exit"
-        )
-
-        choice = (
-            input(
-                "Select: "
+        if (
+            workspace is not None
+            and not isinstance(
+                workspace,
+                WorkspacePaths,
             )
-            .strip()
-        )
+        ):
+            raise TypeError(
+                "workspace must be a WorkspacePaths "
+                "instance or None."
+            )
 
-        if choice == "1":
+        if (
+            entry is not None
+            and not isinstance(
+                entry,
+                EntryPaths,
+            )
+        ):
+            raise TypeError(
+                "entry must be an EntryPaths "
+                "instance or None."
+            )
 
-            try:
+        if (
+            entry is not None
+            and workspace is None
+        ):
+            raise ValueError(
+                "workspace must be supplied when "
+                "entry is supplied."
+            )
 
-                workspace = (
-                    load_workspace(
-                        project_root=(
-                            EWOODX_REPOSITORY_ROOT
-                        )
-                    )
-                )
+        self.workspace = workspace
+        self.entry = entry
+        self.equipment = equipment
 
-                return workspace
+    # -------------------------------------------------------------
+    # Workspace
+    # -------------------------------------------------------------
 
-            except FileNotFoundError as error:
+    def resolve_workspace(
+        self,
+    ) -> WorkspacePaths:
+        """
+        Interactively resolve the workspace used
+        by this sensing process.
+        """
 
-                print()
-                print(
-                    f"[eWoodX] {error}"
-                )
+        while True:
 
-        elif choice == "2":
+            print()
+            print(
+                "eWoodX Sensing"
+            )
 
-            workspace_name = (
+            print(
+                "=============="
+            )
+
+            print()
+            print(
+                "Workspace:"
+            )
+
+            print(
+                "[1] Use last workspace"
+            )
+
+            print(
+                "[2] Open workspace by name"
+            )
+
+            print(
+                "[3] Create new workspace"
+            )
+
+            print(
+                "[4] Exit"
+            )
+
+            choice = (
                 input(
-                    "Workspace name: "
+                    "Select: "
                 )
                 .strip()
             )
 
-            if not workspace_name:
+            if choice == "1":
 
-                print(
-                    "[eWoodX] Workspace "
-                    "name cannot be empty."
+                try:
+
+                    return load_workspace(
+                        project_root=(
+                            EWOODX_REPOSITORY_ROOT
+                        )
+                    )
+
+                except FileNotFoundError as error:
+
+                    print()
+                    print(
+                        f"[eWoodX] {error}"
+                    )
+
+            elif choice == "2":
+
+                workspace_name = (
+                    input(
+                        "Workspace name: "
+                    )
+                    .strip()
                 )
 
-                continue
+                if not workspace_name:
 
-            try:
+                    print(
+                        "[eWoodX] Workspace "
+                        "name cannot be empty."
+                    )
 
-                workspace = (
-                    load_workspace(
+                    continue
+
+                try:
+
+                    return load_workspace(
                         project_root=(
                             EWOODX_REPOSITORY_ROOT
                         ),
@@ -128,57 +189,53 @@ def resolve_workspace(
                             workspace_name
                         ),
                     )
+
+                except FileNotFoundError as error:
+
+                    print()
+                    print(
+                        f"[eWoodX] {error}"
+                    )
+
+            elif choice == "3":
+
+                workspace_name = (
+                    input(
+                        "New workspace name: "
+                    )
+                    .strip()
                 )
 
-                return workspace
+                if not workspace_name:
 
-            except FileNotFoundError as error:
+                    print(
+                        "[eWoodX] Workspace "
+                        "name cannot be empty."
+                    )
 
-                print()
-                print(
-                    f"[eWoodX] {error}"
+                    continue
+
+                workspace_path = (
+                    EWOODX_REPOSITORY_ROOT
+                    / "workspaces"
+                    / workspace_name
                 )
 
-        elif choice == "3":
+                if workspace_path.exists():
 
-            workspace_name = (
-                input(
-                    "New workspace name: "
-                )
-                .strip()
-            )
+                    print(
+                        "[eWoodX] Workspace already "
+                        f"exists: {workspace_name}"
+                    )
 
-            if not workspace_name:
+                    print(
+                        "[eWoodX] Use option 2 "
+                        "to open it."
+                    )
 
-                print(
-                    "[eWoodX] Workspace "
-                    "name cannot be empty."
-                )
+                    continue
 
-                continue
-
-            workspace_path = (
-                EWOODX_REPOSITORY_ROOT
-                / "workspaces"
-                / workspace_name
-            )
-
-            if workspace_path.exists():
-
-                print(
-                    "[eWoodX] Workspace already "
-                    f"exists: {workspace_name}"
-                )
-
-                print(
-                    "[eWoodX] Use option 2 "
-                    "to open it."
-                )
-
-                continue
-
-            workspace = (
-                init_workspace(
+                return init_workspace(
                     project_root=(
                         EWOODX_REPOSITORY_ROOT
                     ),
@@ -189,157 +246,388 @@ def resolve_workspace(
                         EWOODX_WORKSPACE_LAYOUT
                     ),
                 )
+
+            elif choice == "4":
+
+                raise SystemExit(
+                    0
+                )
+
+            else:
+
+                print(
+                    "[eWoodX] Invalid selection."
+                )
+
+    # -------------------------------------------------------------
+    # Entry
+    # -------------------------------------------------------------
+
+    def resolve_entry(
+        self,
+        workspace: WorkspacePaths,
+    ) -> EntryPaths:
+        """
+        Resolve the sensing entry used by this process.
+
+        The user may continue the latest managed entry,
+        select another existing entry, or create a new
+        project-named entry.
+        """
+
+        domain_manager = DomainManager(
+            workspace=workspace
+        )
+
+        sensing_domain = (
+            domain_manager.ensure_domain(
+                SENSING_DOMAIN
+            )
+        )
+
+        entry_manager = EntryManager(
+            domain=sensing_domain
+        )
+
+        while True:
+
+            entries = (
+                entry_manager.list_entries()
             )
 
-            return workspace
-
-        elif choice == "4":
-
-            raise SystemExit(
-                0
+            print()
+            print(
+                "Sensing entry:"
             )
 
-        else:
+            if entries:
+
+                latest_entry = (
+                    entries[-1]
+                )
+
+                print(
+                    "[1] Continue latest entry: "
+                    f"{latest_entry.entry_name}"
+                )
+
+            else:
+
+                latest_entry = None
+
+                print(
+                    "[1] Continue latest entry "
+                    "(none available)"
+                )
 
             print(
-                "[eWoodX] Invalid selection."
+                "[2] Select existing entry"
             )
 
+            print(
+                "[3] Create new entry"
+            )
 
-def resolve_sensing_equipment(
-) -> str:
-    """
-    Interactively choose which sensing equipment
-    is used for the current sensing process.
-    """
+            print(
+                "[4] Exit"
+            )
 
-    while True:
+            choice = (
+                input(
+                    "Select: "
+                )
+                .strip()
+            )
+
+            if choice == "1":
+
+                if latest_entry is None:
+
+                    print(
+                        "[eWoodX] No sensing "
+                        "entries exist yet."
+                    )
+
+                    continue
+
+                return latest_entry
+
+            elif choice == "2":
+
+                if not entries:
+
+                    print(
+                        "[eWoodX] No sensing "
+                        "entries exist yet."
+                    )
+
+                    continue
+
+                print()
+                print(
+                    "Available sensing entries:"
+                )
+
+                for index, entry in enumerate(
+                    entries,
+                    start=1,
+                ):
+                    print(
+                        f"[{index}] "
+                        f"{entry.entry_name}"
+                    )
+
+                selection = (
+                    input(
+                        "Select entry: "
+                    )
+                    .strip()
+                )
+
+                try:
+
+                    selected_index = (
+                        int(selection) - 1
+                    )
+
+                except ValueError:
+
+                    print(
+                        "[eWoodX] Invalid selection."
+                    )
+
+                    continue
+
+                if (
+                    selected_index < 0
+                    or selected_index >= len(entries)
+                ):
+
+                    print(
+                        "[eWoodX] Invalid selection."
+                    )
+
+                    continue
+
+                return entries[
+                    selected_index
+                ]
+
+            elif choice == "3":
+
+                allocator = (
+                    EWoodXEntryAllocator(
+                        entry_manager=(
+                            entry_manager
+                        )
+                    )
+                )
+
+                entry_name = (
+                    allocator.allocate()
+                )
+
+                entry = (
+                    entry_manager.ensure_entry(
+                        entry_name
+                    )
+                )
+
+                print()
+                print(
+                    "[eWoodX] Created sensing entry:"
+                )
+
+                print(
+                    entry.entry_name
+                )
+
+                return entry
+
+            elif choice == "4":
+
+                raise SystemExit(
+                    0
+                )
+
+            else:
+
+                print(
+                    "[eWoodX] Invalid selection."
+                )
+
+    # -------------------------------------------------------------
+    # Equipment
+    # -------------------------------------------------------------
+
+    def resolve_equipment(
+        self,
+    ) -> str:
+        """
+        Interactively choose the sensing equipment.
+        """
+
+        while True:
+
+            print()
+            print(
+                "Sensing equipment:"
+            )
+
+            print(
+                "[1] Arducam"
+            )
+
+            print(
+                "[2] Webcam"
+            )
+
+            print(
+                "[3] Exit"
+            )
+
+            choice = (
+                input(
+                    "Select: "
+                )
+                .strip()
+            )
+
+            if choice == "1":
+
+                return "arducam"
+
+            elif choice == "2":
+
+                return "webcam"
+
+            elif choice == "3":
+
+                raise SystemExit(
+                    0
+                )
+
+            else:
+
+                print(
+                    "[eWoodX] Invalid selection."
+                )
+
+    # -------------------------------------------------------------
+    # Run
+    # -------------------------------------------------------------
+
+    def run(
+        self,
+    ) -> None:
+        """
+        Start the sensing process.
+
+        Missing runtime context is resolved
+        interactively. Supplied context is used
+        directly, allowing later orchestration
+        to invoke the same entrypoint.
+        """
+
+        if self.workspace is None:
+
+            self.workspace = (
+                self.resolve_workspace()
+            )
+
+        if self.entry is None:
+
+            self.entry = (
+                self.resolve_entry(
+                    workspace=(
+                        self.workspace
+                    )
+                )
+            )
+
+        if self.equipment is None:
+
+            self.equipment = (
+                self.resolve_equipment()
+            )
+
+        equipment = (
+            self.equipment
+            .strip()
+            .lower()
+        )
 
         print()
         print(
-            "Sensing equipment:"
+            "[eWoodX] Active workspace:"
         )
 
         print(
-            "[1] Arducam"
+            self.workspace.root
         )
 
         print(
-            "[2] Webcam"
+            "[eWoodX] Active sensing entry:"
         )
 
         print(
-            "[3] Exit"
+            self.entry.root
         )
 
-        choice = (
-            input(
-                "Select: "
+        print(
+            "[eWoodX] Sensing equipment:"
+        )
+
+        print(
+            equipment
+        )
+
+        # ---------------------------------------------------------
+        # Temporary operation construction.
+        #
+        # The segmentation operations still use the old workspace
+        # artifact layout. Their persistence interface will be
+        # migrated to EntityManager in the next step.
+        # ---------------------------------------------------------
+
+        if equipment == "arducam":
+
+            operation = (
+                EWoodXTimberSegmentationArducam(
+                    workspace=(
+                        self.workspace
+                    )
+                )
             )
-            .strip()
-        )
 
-        if choice == "1":
+        elif equipment == "webcam":
 
-            return "arducam"
-
-        elif choice == "2":
-
-            return "webcam"
-
-        elif choice == "3":
-
-            raise SystemExit(
-                0
+            operation = (
+                EWoodXTimberSegmentationAngetube(
+                    workspace=(
+                        self.workspace
+                    )
+                )
             )
 
         else:
 
-            print(
-                "[eWoodX] Invalid selection."
+            raise ValueError(
+                "Unknown sensing equipment: "
+                f"{equipment}"
             )
 
-
-def run_sensing(
-    workspace: WorkspacePaths | None = None,
-    equipment: str | None = None,
-) -> None:
-    """
-    Start the eWoodX sensing process.
-
-    Workspace and sensing equipment may be
-    supplied programmatically later by
-    orchestration.
-
-    If either is not supplied, the corresponding
-    interactive selection is used.
-    """
-
-    if workspace is None:
-
-        workspace = (
-            resolve_workspace()
-        )
-
-    if equipment is None:
-
-        equipment = (
-            resolve_sensing_equipment()
-        )
-
-    equipment = (
-        equipment
-        .strip()
-        .lower()
-    )
-
-    print()
-    print(
-        "[eWoodX] Active workspace:"
-    )
-
-    print(
-        workspace.root
-    )
-
-    print(
-        "[eWoodX] Sensing equipment:"
-    )
-
-    print(
-        equipment
-    )
-
-    if equipment == "arducam":
-
-        operation = (
-            EWoodXTimberSegmentationArducam(
-                workspace=workspace
-            )
-        )
-
-    elif equipment == "webcam":
-
-        operation = (
-            EWoodXTimberSegmentationAngetube(
-                workspace=workspace
-            )
-        )
-
-    else:
-
-        raise ValueError(
-            "Unknown sensing equipment: "
-            f"{equipment}"
-        )
-
-    operation.run()
+        operation.run()
 
 
 def main(
 ) -> None:
 
-    run_sensing()
+    entrypoint = (
+        EWoodXSensingEntrypoint()
+    )
+
+    entrypoint.run()
 
 
 if __name__ == "__main__":
