@@ -48,6 +48,10 @@ from projects.ewoodx.config import (
     SENSING_AGENT_ROLES,
 )
 
+from projects.ewoodx.orchestration.agent_handler import (
+    EWoodXAgentHandler,
+)
+
 
 def run_sensing_agent(
     workspace: WorkspacePaths,
@@ -125,8 +129,13 @@ def run_sensing_agent(
         workflow_client=workflow_client,
     )
 
+    project_handler = EWoodXAgentHandler(
+        agent_handler=agent_handler,
+        master_client=master_client,
+    )
+
     local_server = TCPServer(
-        handler=agent_handler.handle,
+        handler=project_handler.handle,
         host=SENSING_AGENT_HOST,
         port=SENSING_AGENT_PORT,
     )
