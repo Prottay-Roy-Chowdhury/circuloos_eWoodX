@@ -29,11 +29,19 @@ from framework.workspace import (
     load_workspace,
 )
 
+from framework.orchestration import (
+    Orchestrator,
+)
+
 from projects.ewoodx.config import (
     AGENTS_RUNTIME_DIRECTORY,
     EWOODX_REPOSITORY_ROOT,
     MASTER_HOST,
     MASTER_PORT,
+)
+
+from projects.ewoodx.orchestration.master_handler import (
+    EWoodXMasterHandler,
 )
 
 
@@ -76,11 +84,24 @@ def run_master_agent(
     )
 
     # ---------------------------------------------------------
+    # Project orchestration
+    # ---------------------------------------------------------
+
+    orchestrator = Orchestrator(
+        action_store=action_store,
+    )
+
+    master_handler = EWoodXMasterHandler(
+        workflow_handler=workflow_handler,
+        orchestrator=orchestrator,
+    )
+
+    # ---------------------------------------------------------
     # Master communication server
     # ---------------------------------------------------------
 
     server = TCPServer(
-        handler=workflow_handler.handle,
+        handler=master_handler.handle,
         host=MASTER_HOST,
         port=MASTER_PORT,
     )
