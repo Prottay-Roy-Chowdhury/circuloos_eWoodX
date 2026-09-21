@@ -23,10 +23,18 @@ EWOODX_REPOSITORY_ROOT = (
 
 EWOODX_WORKSPACE_LAYOUT = {
     "index": "index",
+    "agents_runtime": "agents_runtime",
     "sensing": "sensing",
     "design": "design",
     "robot_control": "robot_control",
 }
+
+
+# ---------------------------------------------------------------------
+# eWoodX workspace directories
+# ---------------------------------------------------------------------
+
+AGENTS_RUNTIME_DIRECTORY = "agents_runtime"
 
 
 # ---------------------------------------------------------------------
