@@ -30,7 +30,7 @@ from framework.orchestration import (
 
 from projects.ewoodx.config import (
     AGENTS_RUNTIME_ROOT,
-    MASTER_HOST,
+    MASTER_BIND_HOST,
     MASTER_PORT,
 )
 
@@ -85,7 +85,7 @@ def run_master_agent(
 
     server = TCPServer(
         handler=master_handler.handle,
-        host=MASTER_HOST,
+        host=MASTER_BIND_HOST,
         port=MASTER_PORT,
     )
 
@@ -105,7 +105,7 @@ def run_master_agent(
 
     print(
         "[eWoodX] Master API: "
-        f"{MASTER_HOST}:{MASTER_PORT}"
+        f"{MASTER_BIND_HOST}:{MASTER_PORT}"
     )
 
     try:

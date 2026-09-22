@@ -77,6 +77,7 @@ from projects.ewoodx.config.entity import (
 
 from projects.ewoodx.config.communication import (
     AGENTS_RUNTIME_ROOT,
+    MASTER_BIND_HOST,
     MASTER_HOST,
     MASTER_PORT,
     SENSING_AGENT_ID,
@@ -160,6 +161,7 @@ __all__ = [
     "TIMBER_ENTITY_INDEX",
 
     "AGENTS_RUNTIME_ROOT",
+    "MASTER_BIND_HOST",
     "MASTER_HOST",
     "MASTER_PORT",
     "SENSING_AGENT_ID",
