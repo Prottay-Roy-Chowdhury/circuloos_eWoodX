@@ -50,7 +50,7 @@ from projects.ewoodx.orchestration.agent_handler import (
 def run_sensing_agent(
 ) -> None:
     """
-    Start the eWoodX sensing agent for one workspace.
+    Start the eWoodX sensing agent.
 
     The project side composes the generic communication
     framework for the deployed sensing agent.

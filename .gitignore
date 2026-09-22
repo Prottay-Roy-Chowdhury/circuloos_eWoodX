@@ -1,5 +1,6 @@
 **/__pycache__/
 **/workspaces/
+**/agents_runtime/
 **/test_file_transfer_data/
 *.pyc
 

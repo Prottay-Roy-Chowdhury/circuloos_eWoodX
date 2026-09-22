@@ -1,5 +1,6 @@
 from pathlib import Path
 import sys
+import time
 
 
 PROJECT_ROOT = Path(
@@ -32,6 +33,9 @@ from projects.ewoodx.config import (
 from projects.ewoodx.entrypoints.sensing_entrypoint import (
     EWoodXSensingEntrypoint,
 )
+
+SENSING_ACTION_WAIT_INTERVAL = 0.25
+SENSING_ACTION_WAIT_TIMEOUT = 10.0
 
 
 def run_sense_timber(
@@ -81,28 +85,94 @@ def main() -> None:
     # Consume local action
     # ---------------------------------------------------------
 
-    response = client.send(
+    # ---------------------------------------------------------
+    # Start sensing orchestration
+    # ---------------------------------------------------------
+
+    orchestration_response = client.send(
         {
-            "command": "consume_action",
+            "command": "start_orchestration",
+            "orchestration": "sensing",
         }
     )
 
-    if response.get("status") != "ok":
+    if (
+        orchestration_response.get("status")
+        != "ok"
+    ):
         raise RuntimeError(
-            response.get(
+            orchestration_response.get(
                 "message",
-                "Failed to consume action.",
+                "Failed to start sensing orchestration.",
             )
         )
 
-    if response.get("trigger") is not True:
+    created_action = orchestration_response.get(
+        "action"
+    )
 
-        print()
-        print(
-            "[eWoodX] No sensing action available."
+    if not isinstance(
+        created_action,
+        dict,
+    ):
+        raise ValueError(
+            "Invalid sensing orchestration response."
         )
 
-        return
+    action_id = str(
+        created_action.get(
+            "action_id",
+            "",
+        )
+    ).strip()
+
+    print()
+    print(
+        "[eWoodX] Sensing orchestration started"
+    )
+    print(
+        f"[eWoodX] Action ID: {action_id}"
+    )
+
+    # ---------------------------------------------------------
+    # Wait for sensing agent to claim the action
+    # ---------------------------------------------------------
+
+    deadline = (
+        time.monotonic()
+        + SENSING_ACTION_WAIT_TIMEOUT
+    )
+
+    response = None
+
+    while time.monotonic() < deadline:
+
+        response = client.send(
+            {
+                "command": "consume_action",
+            }
+        )
+
+        if response.get("status") != "ok":
+            raise RuntimeError(
+                response.get(
+                    "message",
+                    "Failed to consume sensing action.",
+                )
+            )
+
+        if response.get("trigger") is True:
+            break
+
+        time.sleep(
+            SENSING_ACTION_WAIT_INTERVAL
+        )
+
+    else:
+        raise TimeoutError(
+            "Timed out waiting for the sensing agent "
+            f"to claim action '{action_id}'."
+        )
 
     action_data = response.get(
         "action"
