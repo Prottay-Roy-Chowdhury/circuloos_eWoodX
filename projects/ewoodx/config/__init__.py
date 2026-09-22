@@ -1,8 +1,7 @@
 from projects.ewoodx.config.workspace import (
     EWOODX_PROJECT_ROOT,
     EWOODX_REPOSITORY_ROOT,
-    EWOODX_WORKSPACE_LAYOUT,
-    AGENTS_RUNTIME_DIRECTORY,
+    EWOODX_WORKSPACE_LAYOUT,    
     SENSING_DOMAIN,
     DESIGN_DOMAIN,
     ROBOT_CONTROL_DOMAIN,
@@ -77,6 +76,7 @@ from projects.ewoodx.config.entity import (
 )
 
 from projects.ewoodx.config.communication import (
+    AGENTS_RUNTIME_ROOT,
     MASTER_HOST,
     MASTER_PORT,
     SENSING_AGENT_ID,
@@ -90,8 +90,7 @@ from projects.ewoodx.config.communication import (
 __all__ = [
     "EWOODX_PROJECT_ROOT",
     "EWOODX_REPOSITORY_ROOT",
-    "EWOODX_WORKSPACE_LAYOUT",
-    "AGENTS_RUNTIME_DIRECTORY",
+    "EWOODX_WORKSPACE_LAYOUT",    
     "SENSING_DOMAIN",
     "DESIGN_DOMAIN",
     "ROBOT_CONTROL_DOMAIN",
@@ -160,6 +159,7 @@ __all__ = [
     "ENTITY_ID_RANDOM_ALPHABET",
     "TIMBER_ENTITY_INDEX",
 
+    "AGENTS_RUNTIME_ROOT",
     "MASTER_HOST",
     "MASTER_PORT",
     "SENSING_AGENT_ID",

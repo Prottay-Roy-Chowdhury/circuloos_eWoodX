@@ -1,5 +1,19 @@
 """eWoodX distributed communication configuration."""
 
+from projects.ewoodx.config.workspace import (
+    EWOODX_REPOSITORY_ROOT,
+)
+
+
+# ---------------------------------------------------------------------
+# Agent runtime
+# ---------------------------------------------------------------------
+
+AGENTS_RUNTIME_ROOT = (
+    EWOODX_REPOSITORY_ROOT
+    / "agents_runtime"
+)
+
 
 # ---------------------------------------------------------------------
 # Master

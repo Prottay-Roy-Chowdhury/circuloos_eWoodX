@@ -31,14 +31,8 @@ from framework.communication.workflow import (
     WorkflowClient,
 )
 
-from framework.workspace import (
-    WorkspacePaths,
-    load_workspace,
-)
-
 from projects.ewoodx.config import (
-    AGENTS_RUNTIME_DIRECTORY,
-    EWOODX_REPOSITORY_ROOT,
+    AGENTS_RUNTIME_ROOT,
     MASTER_HOST,
     MASTER_PORT,
     SENSING_AGENT_HOST,
@@ -54,7 +48,6 @@ from projects.ewoodx.orchestration.agent_handler import (
 
 
 def run_sensing_agent(
-    workspace: WorkspacePaths,
 ) -> None:
     """
     Start the eWoodX sensing agent for one workspace.
@@ -62,14 +55,6 @@ def run_sensing_agent(
     The project side composes the generic communication
     framework for the deployed sensing agent.
     """
-
-    if not isinstance(
-        workspace,
-        WorkspacePaths,
-    ):
-        raise TypeError(
-            "workspace must be a WorkspacePaths instance."
-        )
 
     # ---------------------------------------------------------
     # Agent identity
@@ -85,8 +70,7 @@ def run_sensing_agent(
     # ---------------------------------------------------------
 
     agent_runtime_root = (
-        workspace.root
-        / AGENTS_RUNTIME_DIRECTORY
+        AGENTS_RUNTIME_ROOT
         / agent.agent_id
     )
 
@@ -158,10 +142,6 @@ def run_sensing_agent(
     )
 
     print(
-        f"[eWoodX] Workspace: {workspace.root}"
-    )
-
-    print(
         "[eWoodX] Runtime state: "
         f"{agent_runtime_root}"
     )
@@ -196,17 +176,10 @@ def run_sensing_agent(
 def main(
 ) -> None:
     """
-    Start the sensing agent using the current
-    eWoodX workspace.
+    Start the eWoodX sensing agent.
     """
 
-    workspace = load_workspace(
-        project_root=EWOODX_REPOSITORY_ROOT,
-    )
-
-    run_sensing_agent(
-        workspace=workspace,
-    )
+    run_sensing_agent()
 
 
 if __name__ == "__main__":

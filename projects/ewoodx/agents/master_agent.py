@@ -24,18 +24,12 @@ from framework.communication.workflow import (
     WorkflowHandler,
 )
 
-from framework.workspace import (
-    WorkspacePaths,
-    load_workspace,
-)
-
 from framework.orchestration import (
     Orchestrator,
 )
 
 from projects.ewoodx.config import (
-    AGENTS_RUNTIME_DIRECTORY,
-    EWOODX_REPOSITORY_ROOT,
+    AGENTS_RUNTIME_ROOT,
     MASTER_HOST,
     MASTER_PORT,
 )
@@ -46,28 +40,17 @@ from projects.ewoodx.orchestration.master_handler import (
 
 
 def run_master_agent(
-    workspace: WorkspacePaths,
 ) -> None:
     """
-    Start the eWoodX master communication runtime
-    for one workspace.
+    Start the eWoodX master communication runtime.
     """
-
-    if not isinstance(
-        workspace,
-        WorkspacePaths,
-    ):
-        raise TypeError(
-            "workspace must be a WorkspacePaths instance."
-        )
 
     # ---------------------------------------------------------
     # Master persistent action state
     # ---------------------------------------------------------
 
     master_runtime_root = (
-        workspace.root
-        / AGENTS_RUNTIME_DIRECTORY
+        AGENTS_RUNTIME_ROOT
         / "master"
     )
 
@@ -116,10 +99,6 @@ def run_master_agent(
     )
 
     print(
-        f"[eWoodX] Workspace: {workspace.root}"
-    )
-
-    print(
         "[eWoodX] Runtime state: "
         f"{master_runtime_root}"
     )
@@ -146,17 +125,10 @@ def run_master_agent(
 def main(
 ) -> None:
     """
-    Start the master using the current
-    eWoodX workspace.
+    Start the eWoodX master communication runtime.
     """
 
-    workspace = load_workspace(
-        project_root=EWOODX_REPOSITORY_ROOT,
-    )
-
-    run_master_agent(
-        workspace=workspace,
-    )
+    run_master_agent()
 
 
 if __name__ == "__main__":
