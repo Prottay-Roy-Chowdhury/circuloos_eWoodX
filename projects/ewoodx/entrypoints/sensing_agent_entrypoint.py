@@ -190,6 +190,14 @@ def main() -> None:
         action_data
     )
 
+    if action.action_id != action_id:
+        raise RuntimeError(
+            "Sensing agent returned a different "
+            "action than the orchestration created. "
+            f"Expected '{action_id}', "
+            f"received '{action.action_id}'."
+        )
+
     # ---------------------------------------------------------
     # Execute
     # ---------------------------------------------------------
@@ -199,6 +207,33 @@ def main() -> None:
         dispatcher.dispatch(
             action
         )
+
+    except SystemExit:
+
+        terminal_response = client.send(
+            {
+                "command": "mark_terminal",
+                "action_status": "cancelled",
+            }
+        )
+
+        if (
+            terminal_response.get("status")
+            != "ok"
+        ):
+            raise RuntimeError(
+                terminal_response.get(
+                    "message",
+                    "Failed to report cancellation.",
+                )
+            )
+
+        print()
+        print(
+            "[eWoodX] Sensing action cancelled."
+        )
+
+        return
 
     except Exception as execution_error:
 
