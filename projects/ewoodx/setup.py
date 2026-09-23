@@ -82,10 +82,6 @@ def setup_ewoodx_project() -> None:
             f"[eWoodX] {key}: {path}"
         )
 
-    print(
-        "[eWoodX] Project setup complete."
-    )
-
     # -----------------------------------------------------------------
     # Projector calibration directories
     # -----------------------------------------------------------------
@@ -109,6 +105,11 @@ def setup_ewoodx_project() -> None:
         print(
             f"[eWoodX] {key}: {path}"
         )
+
+    
+    print(
+        "[eWoodX] Project setup complete."
+    )
 
 
 if __name__ == "__main__":
