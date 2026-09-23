@@ -21,6 +21,7 @@ sys.path.insert(
 
 from projects.ewoodx.config import (
     CALIBRATION_ROOT,
+    PROJECTOR_RUNTIME_ROOT,
     PROJECTOR_CALIBRATION_MODE,
     PROJECTOR_WIDTH,
     PROJECTOR_HEIGHT,
@@ -391,22 +392,119 @@ class EWoodXProjectorLiveViewer:
         self,
     ) -> dict:
         """
-        Return an empty initial projection state.
+        Load the latest sensed Timber measurement as the initial
+        projector state.
 
-        Workspace-based fallback loading will be
-        connected separately through the eWoodX
-        workspace structure.
+        DEVELOPMENT_NOTE:
+
+        PROJECTOR_RUNTIME_ROOT is a temporary compatibility bridge for
+        the current projector workflow. It preserves the tested reference
+        behavior of loading the latest timber_*_measurement.json file.
+
+        Replace this lookup once projection/design obtains the required
+        entity data through the database / distributed data workflow.
         """
 
+        json_files = list(
+            PROJECTOR_RUNTIME_ROOT.glob(
+                "timber_*_measurement.json"
+            )
+        )
+
+        if not json_files:
+
+            return {
+                "source": "None",
+                "timber_id": 1,
+                "length_mm": 0.0,
+                "width_mm": 0.0,
+                "thickness_mm": 0.0,
+                "contour_mm": [],
+                "corners_mm": [],
+                "defects": [],
+                "cut_geo": [],
+                "mill_geo": [],
+                "points_geo": [],
+                "labels": [],
+            }
+
+        latest_file = max(
+            json_files,
+            key=lambda path: (
+                path.stat().st_mtime
+            ),
+        )
+
+        try:
+
+            timber_data = json.loads(
+                latest_file.read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        except Exception as error:
+
+            print(
+                "[eWoodX] Could not load "
+                "projector fallback JSON:"
+            )
+
+            print(
+                f"  {latest_file}"
+            )
+
+            print(
+                f"  {error}"
+            )
+
+            return {
+                "source": "None",
+                "timber_id": 1,
+                "length_mm": 0.0,
+                "width_mm": 0.0,
+                "thickness_mm": 0.0,
+                "contour_mm": [],
+                "corners_mm": [],
+                "defects": [],
+                "cut_geo": [],
+                "mill_geo": [],
+                "points_geo": [],
+                "labels": [],
+            }
+
         return {
-            "source": "None",
-            "timber_id": 1,
-            "length_mm": 0.0,
-            "width_mm": 0.0,
-            "thickness_mm": 0.0,
-            "contour_mm": [],
-            "corners_mm": [],
-            "defects": [],
+            "source": (
+                latest_file.name
+            ),
+            "timber_id": timber_data.get(
+                "timber_id",
+                1,
+            ),
+            "length_mm": timber_data.get(
+                "length_mm",
+                0.0,
+            ),
+            "width_mm": timber_data.get(
+                "width_mm",
+                0.0,
+            ),
+            "thickness_mm": timber_data.get(
+                "timber_thickness_mm",
+                TIMBER_THICKNESS_MM,
+            ),
+            "contour_mm": timber_data.get(
+                "contour_mm",
+                [],
+            ),
+            "corners_mm": timber_data.get(
+                "corners_mm",
+                [],
+            ),
+            "defects": timber_data.get(
+                "defects",
+                [],
+            ),
             "cut_geo": [],
             "mill_geo": [],
             "points_geo": [],
@@ -2050,7 +2148,7 @@ class EWoodXProjectorLiveViewer:
     ) -> None:
 
         (
-            _,
+            current_data,
             _,
             _,
             _,
@@ -2090,6 +2188,11 @@ class EWoodXProjectorLiveViewer:
         print(
             "  Base Thickness:  "
             f"{thickness_mm:.1f} mm"
+        )
+
+        print(
+            "  Initial Source:  "
+            f"{current_data.get('source', 'None')}"
         )
 
         print(
