@@ -62,6 +62,8 @@ from projects.ewoodx.config import (
 
     TIMBER_ENTITY_TYPE,
     TIMBER_ID_PREFIX,
+
+    PROJECTOR_RUNTIME_ROOT,
 )
 
 from projects.ewoodx.operations.entity_id_allocator import (
@@ -2541,6 +2543,44 @@ class EWoodXTimberSegmentationAngetube:
             encoding="utf-8",
         )
 
+        # -------------------------------------------------------------
+        # Temporary projector compatibility copy.
+        #
+        # DEVELOPMENT_NOTE:
+        #
+        # This duplicates only the final measurements JSON into the
+        # repository-level projector_runtime directory so the current
+        # projector workflow can continue locating the latest
+        # timber_*_measurement.json file.
+        #
+        # The entity-local measurements.json above remains the
+        # authoritative persistent sensing artifact.
+        #
+        # Remove this compatibility write once projection/design obtains
+        # entity data through the database / distributed data workflow.
+        # -------------------------------------------------------------
+
+        PROJECTOR_RUNTIME_ROOT.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        projector_measurement_file = (
+            PROJECTOR_RUNTIME_ROOT
+            / (
+                f"timber_{timber_id}"
+                "_measurement.json"
+            )
+        )
+
+        projector_measurement_file.write_text(
+            json.dumps(
+                measurement,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
         print()
         print(
             "[eWoodX] Timber entity created:"
@@ -2570,4 +2610,9 @@ class EWoodXTimberSegmentationAngetube:
 
         print(
             f"  Measurement: {measurement_file}"
+        )
+
+        print(
+            "  Projector compatibility: "
+            f"{projector_measurement_file}"
         )

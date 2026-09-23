@@ -2,6 +2,7 @@
 **/workspaces/
 **/agents_runtime/
 **/test_file_transfer_data/
+**/projector_runtime/
 *.pyc
 
 .vscode/

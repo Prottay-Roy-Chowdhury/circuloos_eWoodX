@@ -3,6 +3,10 @@
 import argparse
 import os
 
+from projects.ewoodx.config.workspace import (
+    EWOODX_REPOSITORY_ROOT,
+)
+
 from projects.ewoodx.config.sensing import (
     TABLE_WIDTH_MM,
     TABLE_HEIGHT_MM,
@@ -173,3 +177,30 @@ PROJECTOR_CALIBRATION_LAYOUT = {
         "projector/automatic"
     ),
 }
+
+# ---------------------------------------------------------------------
+# Temporary projector compatibility directory
+# ---------------------------------------------------------------------
+#
+# DEVELOPMENT NOTE:
+#
+# This directory is a temporary compatibility bridge for the current
+# projector workflow.
+#
+# Every successfully sensed Timber entity also writes a copy of its
+# measurements JSON here so the projector can continue using the
+# reference workflow of locating the latest:
+#
+#     timber_*_measurement.json
+#
+# The persistent Timber entity remains the authoritative source.
+#
+# This temporary directory should be removed or replaced once the
+# design/data workflow retrieves the required entity data through the
+# database / distributed communication workflow.
+# ---------------------------------------------------------------------
+
+PROJECTOR_RUNTIME_ROOT = (
+    EWOODX_REPOSITORY_ROOT
+    / "projector_runtime"
+)

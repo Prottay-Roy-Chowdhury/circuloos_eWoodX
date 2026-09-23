@@ -106,6 +106,8 @@ from projects.ewoodx.config.projection import (
     PROJECTOR_OFFSET_Y_MM,
 
     PROJECTOR_CALIBRATION_MODE,
+
+    PROJECTOR_RUNTIME_ROOT,
 )
 
 
@@ -208,4 +210,6 @@ __all__ = [
     "PROJECTOR_OFFSET_Y_MM",
 
     "PROJECTOR_CALIBRATION_MODE",
+
+    "PROJECTOR_RUNTIME_ROOT",
 ]
