@@ -175,9 +175,61 @@ class EWoodXArducamIntrinsicCalibration:
                     self.camera.capture()
                 )
 
+                display = (
+                    frame.copy()
+                )
+
+                gray = cv2.cvtColor(
+                    frame,
+                    cv2.COLOR_BGR2GRAY,
+                )
+
+                (
+                    checkerboard_found,
+                    checkerboard_corners,
+                ) = (
+                    cv2.findChessboardCorners(
+                        gray,
+                        self.checkerboard_inner_corners,
+                        None,
+                    )
+                )
+
+                if checkerboard_found:
+
+                    cv2.drawChessboardCorners(
+                        display,
+                        self.checkerboard_inner_corners,
+                        checkerboard_corners,
+                        checkerboard_found,
+                    )
+
+                status_text = (
+                    "Photos saved: "
+                    f"{photo_count}"
+                    " | Board detected: "
+                    f"{'YES' if checkerboard_found else 'NO'}"
+                )
+
+                status_color = (
+                    (0, 255, 0)
+                    if checkerboard_found
+                    else (0, 0, 255)
+                )
+
+                cv2.putText(
+                    display,
+                    status_text,
+                    (30, 50),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1.0,
+                    status_color,
+                    2,
+                )
+
                 cv2.imshow(
                     "eWoodX Arducam Intrinsic Calibration",
-                    frame,
+                    display,
                 )
 
                 key = (
@@ -186,6 +238,15 @@ class EWoodXArducamIntrinsicCalibration:
                 )
 
                 if key == 32:
+
+                    if not checkerboard_found:
+
+                        print(
+                            "[eWoodX] Warning: "
+                            "checkerboard not fully "
+                            "detected in frame. "
+                            "Saving anyway."
+                        )
 
                     photo_count += 1
 
