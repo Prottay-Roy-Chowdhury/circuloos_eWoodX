@@ -91,6 +91,8 @@ from projects.ewoodx.config.communication import (
 )
 
 from projects.ewoodx.config.projection import (
+    PROJECTOR_CALIBRATION_LAYOUT,
+
     PROJECTOR_HEIGHT_MM,
     PROJECTOR_POS_X_MM,
     PROJECTOR_POS_Y_MM,
@@ -188,6 +190,8 @@ __all__ = [
     "SENSING_AGENT_HOST",
     "SENSING_AGENT_PORT",
     "SENSING_AGENT_POLL_INTERVAL",
+
+    "PROJECTOR_CALIBRATION_LAYOUT",
 
     "PROJECTOR_HEIGHT_MM",
     "PROJECTOR_POS_X_MM",

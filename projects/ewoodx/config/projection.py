@@ -152,3 +152,16 @@ PROJECTOR_OFFSET_X_MM = (
 PROJECTOR_OFFSET_Y_MM = (
     0.0
 )
+
+# ---------------------------------------------------------------------
+# Projector calibration directory layout
+# ---------------------------------------------------------------------
+
+PROJECTOR_CALIBRATION_LAYOUT = {
+    "manual": (
+        "projector/manual"
+    ),
+    "automatic": (
+        "projector/automatic"
+    ),
+}

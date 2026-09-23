@@ -18,6 +18,7 @@ from projects.ewoodx.config import (
     CALIBRATION_ROOT,
     ARDUCAM_CALIBRATION_LAYOUT,
     ANGETUBE_CALIBRATION_LAYOUT,
+    PROJECTOR_CALIBRATION_LAYOUT,
 )
 
 
@@ -84,6 +85,30 @@ def setup_ewoodx_project() -> None:
     print(
         "[eWoodX] Project setup complete."
     )
+
+    # -----------------------------------------------------------------
+    # Projector calibration directories
+    # -----------------------------------------------------------------
+
+    projector_calibration_directories = DirectoryManager(
+        root=CALIBRATION_ROOT,
+        layout=PROJECTOR_CALIBRATION_LAYOUT,
+    )
+
+    projector_calibration_directories.ensure_directories()
+
+    print(
+        "[eWoodX] Projector calibration directories:"
+    )
+
+    for key, path in (
+        projector_calibration_directories
+        .directories()
+        .items()
+    ):
+        print(
+            f"[eWoodX] {key}: {path}"
+        )
 
 
 if __name__ == "__main__":
