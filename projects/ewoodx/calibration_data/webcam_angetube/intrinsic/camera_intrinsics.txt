@@ -4,10 +4,10 @@ ANGETUBE INTRINSIC CALIBRATION REPORT
 Calibration model: OpenCV Fisheye
 Checkerboard inner corners: (13, 8)
 Checkerboard square size: 20.000000 mm
-Accepted images: 14
-Total images: 14
+Accepted images: 10
+Total images: 10
 Image resolution: 3840 x 2160
-RMS reprojection error: 0.21664169 px
+RMS reprojection error: 0.55617580 px
 Fisheye balance: 0.0
 Fisheye FOV scale: 1.0
 Fisheye CHECK_COND: True
@@ -15,9 +15,9 @@ Fisheye RECOMPUTE_EXTRINSIC: True
 Fisheye FIX_SKEW: True
 
 Camera Matrix (K):
-[[2780.6364718     0.         1962.65126805]
- [   0.         2781.60433601 1191.66396773]
+[[2104.29177362    0.         1922.91826971]
+ [   0.         2074.89692071 1078.89851856]
  [   0.            0.            1.        ]]
 
 Distortion Coefficients (D):
-[  0.25508522   1.244622   -11.65533312  52.61803235]
+[ 0.27400714  0.37425779 -0.97087431  2.11151808]
