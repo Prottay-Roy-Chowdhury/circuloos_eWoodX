@@ -11,6 +11,9 @@ from projects.ewoodx.config.workspace import (
 
 from projects.ewoodx.config.sensing import (
     CALIBRATION_ROOT,
+    TABLE_HEIGHT_MM,
+    TABLE_WIDTH_MM,
+    
 
     ARDUCAM_CAMERA_INDEX,
     ARDUCAM_IMAGE_WIDTH,
@@ -99,6 +102,8 @@ __all__ = [
     "ENTRY_DATE_FORMAT",
 
     "CALIBRATION_ROOT",
+    "TABLE_HEIGHT_MM",
+    "TABLE_WIDTH_MM",
 
     "ARDUCAM_CAMERA_INDEX",
     "ARDUCAM_IMAGE_WIDTH",

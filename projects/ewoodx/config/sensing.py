@@ -13,6 +13,18 @@ CALIBRATION_ROOT = (
 )
 
 # ---------------------------------------------------------------------
+# eWoodX physical workspace
+# ---------------------------------------------------------------------
+
+TABLE_WIDTH_MM = (
+    1780.0
+)
+
+TABLE_HEIGHT_MM = (
+    1040.0
+)
+
+# ---------------------------------------------------------------------
 # Arducam acquisition
 # ---------------------------------------------------------------------
 
@@ -69,9 +81,12 @@ ARDUCAM_MARKER_SIZE_MM = (
 
 ARDUCAM_MARKER_WORLD_POSITIONS_MM = {
     1: (0.0, 0.0),
-    0: (776.0, 0.0),
-    2: (0.0, 440.0),
-    3: (776.0, 440.0),
+    0: (TABLE_WIDTH_MM, 0.0),
+    2: (0.0, TABLE_HEIGHT_MM),
+    3: (
+        TABLE_WIDTH_MM,
+        TABLE_HEIGHT_MM,
+    ),
 }
 
 ARDUCAM_MARKER_OUTER_CORNERS = {
@@ -227,9 +242,12 @@ ANGETUBE_MARKER_SIZE_MM = (
 
 ANGETUBE_MARKER_WORLD_POSITIONS_MM = {
     1: (0.0, 0.0),
-    0: (776.0, 0.0),
-    2: (0.0, 440.0),
-    3: (776.0, 440.0),
+    0: (TABLE_WIDTH_MM, 0.0),
+    2: (0.0, TABLE_HEIGHT_MM),
+    3: (
+        TABLE_WIDTH_MM,
+        TABLE_HEIGHT_MM,
+    ),
 }
 
 ANGETUBE_MARKER_OUTER_CORNERS = {
