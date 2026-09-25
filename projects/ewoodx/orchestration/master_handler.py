@@ -1,6 +1,5 @@
 """eWoodX master-side orchestration request handling."""
 
-from pathlib import Path
 from typing import Any, Dict
 
 from framework.workspace import (
