@@ -2,10 +2,11 @@
 
 The `framework.communication.transport.tcp` package provides generic TCP-based communication for the framework.
 
-It supports two related transport patterns:
+It supports three related transport patterns:
 
 1. **JSON request-response communication** for structured messages.
 2. **Negotiated file transfer** using JSON messages for coordination and raw TCP bytes for file contents.
+3. **Persistent bidirectional JSON streaming** for asynchronous message exchange over long-lived connections.
 
 The package is independent of application-specific commands, actions, entities, files, and storage structures.
 
@@ -41,6 +42,9 @@ The TCP transport layer provides:
 - low-level binary file streaming;
 - negotiated file download and upload;
 - separation between transport mechanics and application-level file resolution.
+- persistent bidirectional JSON streaming;
+- multiple concurrent streaming client connections;
+- explicit streaming connection lifecycle management;
 
 It does **not**:
 
@@ -1701,6 +1705,8 @@ from framework.communication.transport.tcp import (
     receive_file,
     TCPFileClient,
     TCPFileServer,
+    TCPStreamClient,
+    TCPStreamServer,
 )
 ```
 

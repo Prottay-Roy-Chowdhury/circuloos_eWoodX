@@ -27,6 +27,7 @@ The transport layer provides:
 - request-response communication;
 - file transfer;
 - client and server transport interfaces;
+- persistent bidirectional JSON streaming;
 - separation between communication mechanics and application behavior.
 
 It does **not**:
@@ -73,9 +74,11 @@ framework.communication.transport
               │
               ▼
              TCP
-        ┌─────┴─────┐
-        ▼           ▼
-   JSON messages   files
+              │
+      ┌───────┼────────┐
+      ▼       ▼        ▼
+   Request  Streaming  File
+   response            transfer
 ```
 
 The parent `transport` package exposes the main client and server classes, while protocol details and lower-level utilities remain available from the TCP subpackage.
@@ -102,6 +105,7 @@ TRANSPORT
 │ message transmission
 │ request-response
 │ file transfer
+│ persistent streaming
 │
 ▼
 ────────────────────────────────
