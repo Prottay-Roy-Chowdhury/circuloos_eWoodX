@@ -14,6 +14,8 @@ from framework.communication.transport import (
     TCPServer,
     TCPFileClient,
     TCPFileServer,
+    TCPStreamClient,
+    TCPStreamServer,
 )
 ```
 
@@ -55,6 +57,9 @@ transport/
     ├── protocol.py
     ├── tcp_client.py
     ├── tcp_server.py
+    ├── stream_connection.py
+    ├── stream_client.py
+    ├── stream_server.py
     ├── file_transfer.py
     ├── file_client.py
     ├── file_server.py
@@ -236,6 +241,8 @@ from framework.communication.transport import (
     TCPServer,
     TCPFileClient,
     TCPFileServer,
+    TCPStreamClient,
+    TCPStreamServer,
 )
 ```
 
@@ -274,6 +281,8 @@ The public API exposed directly by `framework.communication.transport` is:
 | `TCPServer` | Receive structured TCP requests and delegate them to an application handler. |
 | `TCPFileClient` | Download or upload files using negotiated TCP file transfer. |
 | `TCPFileServer` | Serve negotiated file downloads and uploads using application-provided resolvers. |
+| `TCPStreamClient` | Persistent bidirectional JSON client with explicit connection lifecycle. |
+| `TCPStreamServer` | Multi-client bidirectional JSON server with targeted sends and broadcasts. |
 
 The lower-level TCP package additionally exposes protocol and file-streaming utilities.
 

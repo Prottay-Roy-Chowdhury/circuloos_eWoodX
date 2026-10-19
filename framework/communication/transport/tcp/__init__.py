@@ -23,6 +23,13 @@ from framework.communication.transport.tcp.file_server import (
     TCPFileServer,
 )
 
+from framework.communication.transport.tcp.stream_client import (
+    TCPStreamClient,
+)
+
+from framework.communication.transport.tcp.stream_server import (
+    TCPStreamServer,
+)
 
 __all__ = [
     "encode_message",
@@ -37,4 +44,6 @@ __all__ = [
     "receive_file",
     "TCPFileClient",
     "TCPFileServer",
+    "TCPStreamClient",
+    "TCPStreamServer",
 ]

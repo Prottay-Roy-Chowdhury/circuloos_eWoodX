@@ -25,6 +25,8 @@ from framework.communication.transport.tcp import (
     receive_file,
     TCPFileClient,
     TCPFileServer,
+    TCPStreamClient,
+    TCPStreamServer,
 )
 ```
 
@@ -1336,6 +1338,293 @@ client.upload(
     file_path="uploads/example.txt",
 )
 ```
+
+---
+
+# Persistent Bidirectional JSON Streaming
+
+The TCP package also supports persistent bidirectional JSON streaming.
+
+Unlike request-response communication, streaming maintains an open TCP connection through which either endpoint can send messages independently.
+
+The streaming components are:
+
+- `TCPStreamClient`
+- `TCPStreamServer`
+- `TCPStreamConnection` (internal connection implementation)
+
+The client and server reuse the same length-prefixed JSON protocol used by the existing TCP transport.
+
+## Communication Model
+
+```text
+TCPStreamClient                    TCPStreamServer
+       │                                  │
+       │ establish persistent connection  │
+       ├─────────────────────────────────►│
+       │                                  │
+       │ JSON message                     │
+       ├─────────────────────────────────►│
+       │                                  │
+       │ JSON message                     │
+       │◄─────────────────────────────────┤
+       │                                  │
+       │ JSON message                     │
+       ├─────────────────────────────────►│
+       │                                  │
+       │ connection remains open          │
+       │                                  │
+```
+
+There is no requirement for each outgoing message to receive an immediate response.
+
+Messages are application-defined dictionaries.
+
+## TCPStreamClient
+
+`TCPStreamClient` manages one persistent connection to a streaming server.
+
+Constructor:
+
+```python
+TCPStreamClient(
+    port: int,
+    on_message,
+    host: str = DEFAULT_HOST,
+    timeout: float = DEFAULT_CONNECT_TIMEOUT,
+    on_disconnect=None,
+)
+```
+
+The `on_message` callback receives one decoded JSON dictionary.
+
+The optional `on_disconnect` callback is invoked when the connection closes.
+
+Public interface:
+
+```python
+client.connect()
+client.send(message)
+client.close()
+
+client.connected
+```
+
+`connect()` establishes the TCP connection and starts a background receive loop.
+
+`send()` transmits one framed JSON dictionary over the existing connection.
+
+`close()` closes the connection.
+
+The connection timeout applies to the initial connection attempt. The persistent receive loop does not use that timeout during normal idle periods.
+
+## TCPStreamServer
+
+`TCPStreamServer` manages a listening socket and multiple persistent client connections.
+
+Constructor:
+
+```python
+TCPStreamServer(
+    port: int,
+    on_message,
+    host: str = DEFAULT_HOST,
+    accept_timeout: float = DEFAULT_ACCEPT_TIMEOUT,
+    on_connect=None,
+    on_disconnect=None,
+)
+```
+
+The message callback receives:
+
+```python
+on_message(client_id, message)
+```
+
+Each accepted connection receives a unique server-side `client_id`.
+
+Public interface:
+
+```python
+server.start()
+server.send(client_id, message)
+server.broadcast(message)
+server.stop()
+
+server.running
+server.client_ids
+```
+
+`start()` starts the background accept loop and returns after the listening socket has been initialized.
+
+`send()` targets a particular connected client.
+
+`broadcast()` sends a message to the currently registered connections.
+
+`stop()` closes the listening socket and active connections, then waits for the server accept thread to terminate.
+
+The optional callbacks are:
+
+```python
+on_connect(client_id, address)
+on_disconnect(client_id)
+```
+
+## Basic Bidirectional Example
+
+Server:
+
+```python
+from framework.communication.transport import TCPStreamServer
+
+
+def on_message(client_id, message):
+    print("Received:", client_id, message)
+
+    server.send(
+        client_id,
+        {"type": "ack", "value": message},
+    )
+
+
+server = TCPStreamServer(
+    host="127.0.0.1",
+    port=5200,
+    on_message=on_message,
+)
+
+server.start()
+```
+
+Client:
+
+```python
+from framework.communication.transport import TCPStreamClient
+
+
+def on_message(message):
+    print("Server message:", message)
+
+
+client = TCPStreamClient(
+    host="127.0.0.1",
+    port=5200,
+    on_message=on_message,
+)
+
+client.connect()
+
+client.send({
+    "type": "sample",
+    "value": 10,
+})
+```
+
+The server and client must run in processes or execution contexts that remain active while communication is required.
+
+## Connection Lifecycle
+
+Streaming connections have an explicit lifecycle:
+
+```text
+disconnected
+     │
+     │ connect()
+     ▼
+connected
+     │
+     ├── send messages
+     │
+     ├── receive messages
+     │
+     ▼
+disconnected
+     │
+     │ connect()
+     ▼
+connected
+```
+
+A client can explicitly reconnect using the same `TCPStreamClient` instance after its previous connection has closed.
+
+The server can also be stopped and restarted.
+
+## Reconnection Policy
+
+Automatic reconnection is not implemented by the transport.
+
+This is intentional.
+
+The transport provides connection operations and disconnection notifications, while the application decides:
+
+- whether reconnection is appropriate;
+- when to attempt reconnection;
+- how long to wait between attempts;
+- when to stop retrying;
+- whether application state must be synchronized after reconnection.
+
+This separation avoids coupling network recovery to application-specific execution or workflow state.
+
+Applications should not perform blocking reconnection attempts directly inside receive callbacks.
+
+## Message Delivery Semantics
+
+Streaming uses TCP, which provides ordered byte delivery while a connection remains healthy.
+
+However, successful completion of:
+
+```python
+client.send(message)
+```
+
+or:
+
+```python
+server.send(client_id, message)
+```
+
+does not prove that the remote application has received, interpreted, or processed the message.
+
+It means the local socket send operation completed without reporting an error.
+
+The streaming transport does not currently provide:
+
+- application-level message acknowledgments;
+- durable message queues;
+- automatic message replay after reconnection;
+- deduplication of repeated messages;
+- exactly-once application processing guarantees.
+
+Messages in transit when a connection fails may have an uncertain delivery outcome.
+
+An application requiring confirmed processing must implement an acknowledgment protocol and any necessary persistence or deduplication.
+
+Reconnection does not automatically resend previously transmitted messages.
+
+## Error Handling
+
+The internal `TCPStreamConnection` manages socket closure and reports unexpected receive-loop errors.
+
+Normal remote disconnection is treated as a connection lifecycle event.
+
+Exceptions raised by application message callbacks, including `ConnectionError`, are treated as application errors rather than silently interpreted as remote disconnection.
+
+The connection is closed after a receive-loop error.
+
+The transport remains independent of the meaning of application messages.
+
+## Relationship to Other TCP Components
+
+The TCP package now supports three communication patterns:
+
+| Pattern | Components | Purpose |
+|---|---|---|
+| Request-response | `TCPClient`, `TCPServer` | One request and one response per connection |
+| File transfer | `TCPFileClient`, `TCPFileServer` | Negotiated binary file upload and download |
+| Bidirectional streaming | `TCPStreamClient`, `TCPStreamServer` | Persistent asynchronous JSON message exchange |
+
+These components are independent and can be composed by higher-level applications as needed.
+
 
 ---
 

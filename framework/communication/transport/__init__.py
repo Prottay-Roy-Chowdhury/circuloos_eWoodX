@@ -3,6 +3,8 @@ from framework.communication.transport.tcp import (
     TCPServer,
     TCPFileClient,
     TCPFileServer,
+    TCPStreamClient,
+    TCPStreamServer,
 )
 
 __all__ = [
@@ -10,4 +12,6 @@ __all__ = [
     "TCPServer",
     "TCPFileClient",
     "TCPFileServer",
+    "TCPStreamClient",
+    "TCPStreamServer",
 ]
