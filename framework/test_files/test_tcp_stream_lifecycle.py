@@ -138,11 +138,59 @@ def test_disconnect_callback_exception():
 
     print("[PASS] Disconnect callback exception handling")
 
+def test_callback_connection_error():
+    """Application ConnectionError must be reported."""
+
+    sock1, sock2 = socket.socketpair()
+
+    errors = []
+    disconnected = threading.Event()
+
+    def on_message(message):
+        raise ConnectionError(
+            "Application callback failure"
+        )
+
+    connection = TCPStreamConnection(
+        sock=sock1,
+        on_message=on_message,
+        on_disconnect=disconnected.set,
+        on_error=errors.append,
+    )
+
+    try:
+        connection.start()
+
+        from framework.communication.transport.tcp.protocol import (
+            send_message,
+        )
+
+        send_message(
+            sock2,
+            {"type": "test"},
+        )
+
+        assert disconnected.wait(timeout=3.0)
+
+        assert len(errors) == 1
+        assert isinstance(errors[0], ConnectionError)
+        assert str(errors[0]) == (
+            "Application callback failure"
+        )
+        assert not connection.connected
+
+        print("[PASS] Application ConnectionError handling")
+
+    finally:
+        connection.close()
+        sock2.close()
+
 
 def main():
     test_concurrent_close()
     test_callback_exception()
     test_disconnect_callback_exception()
+    test_callback_connection_error()
 
     print()
     print("=" * 50)

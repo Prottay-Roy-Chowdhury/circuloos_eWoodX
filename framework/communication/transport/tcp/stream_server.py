@@ -167,12 +167,6 @@ class TCPStreamServer:
                         break
                     raise
 
-                # stop() may have been called while accept()
-                # was completing.
-                if self._stop_event.is_set():
-                    client_socket.close()
-                    break
-
                 client_id = str(uuid.uuid4())
 
                 connection = TCPStreamConnection(
@@ -185,17 +179,40 @@ class TCPStreamServer:
                     ),
                 )
 
-                with self._lock:
-                    self._connections[client_id] = connection
+                # Registration and shutdown must be synchronized.
+                # stop() uses the same lifecycle lock when setting
+                # the stop event.
+                with self._lifecycle_lock:
+                    if self._stop_event.is_set():
+                        client_socket.close()
+                        break
+
+                    with self._lock:
+                        self._connections[client_id] = connection
 
                 try:
+                    # stop() may close the registered connection
+                    # before its receive thread starts.
+                    if not connection.connected:
+                        break
+
                     connection.start()
+
+                    if self._stop_event.is_set():
+                        connection.close()
+                        break
 
                     if self.on_connect is not None:
                         self.on_connect(client_id, address)
 
                 except Exception:
                     connection.close()
+
+                    # Shutdown-related startup failures are expected.
+                    # Other failures must still be reported.
+                    if self._stop_event.is_set():
+                        break
+
                     raise
 
         finally:
