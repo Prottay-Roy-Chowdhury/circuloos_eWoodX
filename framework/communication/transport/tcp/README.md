@@ -41,10 +41,10 @@ The TCP transport layer provides:
 - request-response TCP clients and servers;
 - low-level binary file streaming;
 - negotiated file download and upload;
-- separation between transport mechanics and application-level file resolution.
+- separation between transport mechanics and application-level file resolution;
 - persistent bidirectional JSON streaming;
 - multiple concurrent streaming client connections;
-- explicit streaming connection lifecycle management;
+- explicit streaming connection lifecycle management.
 
 It does **not**:
 
