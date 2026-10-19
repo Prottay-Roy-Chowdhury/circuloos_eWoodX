@@ -139,32 +139,30 @@ class TCPStreamConnection:
         try:
             while not self._closed.is_set():
 
-                message = receive_message(
-                    self._socket
-                )
+                try:
+                    message = receive_message(
+                        self._socket
+                    )
+
+                except ConnectionError:
+                    # Remote socket closure is a normal
+                    # connection lifecycle event.
+                    break
 
                 if not isinstance(message, dict):
                     raise ValueError(
                         "Stream message must be a dictionary."
                     )
 
+                # Application exceptions, including ConnectionError,
+                # are handled by the outer exception handler.
                 self._on_message(message)
 
-        except ConnectionError:
-            # A remote peer may close its socket normally.
-            # Treat this as a disconnection, not an
-            # application error.
-            pass
-
         except OSError as exc:
-            # Report unexpected socket errors unless
-            # shutdown was already requested locally.
             if not self._closed.is_set():
                 self._report_error(exc)
 
         except Exception as exc:
-            # Invalid messages and application callback
-            # exceptions remain reportable errors.
             if not self._closed.is_set():
                 self._report_error(exc)
 
