@@ -4,6 +4,7 @@ import socket
 import threading
 import uuid
 from typing import Any, Callable, Dict
+import sys
 
 from framework.communication.transport.tcp.config import (
     DEFAULT_ACCEPT_TIMEOUT,
@@ -23,11 +24,11 @@ class TCPStreamServer:
     """
     Persistent bidirectional TCP JSON streaming server.
 
-    Supports multiple concurrent client connections.
+    Supports multiple concurrent clients, targeted messages,
+    broadcasts, and controlled startup/shutdown.
 
-    Each client has an independent receive thread.
-    Messages can be sent to one client or broadcast
-    to all connected clients.
+    start() confirms that the listening socket is ready
+    before returning.
     """
 
     def __init__(
@@ -55,6 +56,7 @@ class TCPStreamServer:
         ] = {}
 
         self._lock = threading.Lock()
+        self._lifecycle_lock = threading.RLock()
         self._stop_event = threading.Event()
 
         self._server_socket: socket.socket | None = None
@@ -62,65 +64,98 @@ class TCPStreamServer:
 
     @property
     def running(self) -> bool:
-        """Whether the server is accepting connections."""
+        """Whether the server listener is active."""
 
-        return (
-            self._server_thread is not None
-            and self._server_thread.is_alive()
-            and not self._stop_event.is_set()
-        )
+        with self._lifecycle_lock:
+            return (
+                self._server_socket is not None
+                and self._server_thread is not None
+                and self._server_thread.is_alive()
+                and not self._stop_event.is_set()
+            )
 
     @property
     def client_ids(self) -> list[str]:
-        """Return identifiers of currently connected clients."""
+        """Return identifiers of connected clients."""
 
         with self._lock:
             return list(self._connections.keys())
 
     def start(self) -> None:
-        """Start the TCP listener in a background thread."""
+        """
+        Bind, listen, and start the background accept loop.
 
-        with self._lock:
-            if self.running:
-                raise RuntimeError("Stream server is already running.")
+        Raises OSError directly if socket setup fails.
+        """
+
+        with self._lifecycle_lock:
+            if self._server_thread is not None:
+                if self._server_thread.is_alive():
+                    raise RuntimeError(
+                        "Stream server is already running."
+                    )
+
+            server = socket.socket(
+                socket.AF_INET,
+                socket.SOCK_STREAM,
+            )
+
+            try:
+                if sys.platform == "win32":
+                    # Prevent another socket from binding to the same
+                    # listening address and port on Windows.
+                    server.setsockopt(
+                        socket.SOL_SOCKET,
+                        socket.SO_EXCLUSIVEADDRUSE,
+                        1,
+                    )
+                else:
+                    # Allow conventional address reuse after shutdown
+                    # on Linux and other supported Unix systems.
+                    server.setsockopt(
+                        socket.SOL_SOCKET,
+                        socket.SO_REUSEADDR,
+                        1,
+                    )
+
+                server.bind((self.host, self.port))
+                server.listen()
+                server.settimeout(self.accept_timeout)
+
+            except Exception:
+                server.close()
+                raise
 
             self._stop_event.clear()
+            self._server_socket = server
 
             self._server_thread = threading.Thread(
                 target=self._serve,
+                args=(server,),
                 name="tcp-stream-server",
                 daemon=True,
             )
 
-            self._server_thread.start()
+            try:
+                self._server_thread.start()
+            except Exception:
+                self._stop_event.set()
+                self._server_socket = None
+                self._server_thread = None
+                server.close()
+                raise
 
-    def _serve(self) -> None:
-        """Accept clients and create independent stream connections."""
-
-        server = socket.socket(
-            socket.AF_INET,
-            socket.SOCK_STREAM,
+        print(
+            f"[tcp-stream-server] Listening on "
+            f"{self.host}:{self.port}"
         )
 
+    def _serve(self, server: socket.socket) -> None:
+        """Accept clients until shutdown is requested."""
+
         try:
-            server.setsockopt(
-                socket.SOL_SOCKET,
-                socket.SO_REUSEADDR,
-                1,
-            )
-
-            server.bind((self.host, self.port))
-            server.listen()
-            server.settimeout(self.accept_timeout)
-
-            self._server_socket = server
-
-            print(
-                f"[tcp-stream-server] Listening on "
-                f"{self.host}:{self.port}"
-            )
-
             while not self._stop_event.is_set():
+
                 try:
                     client_socket, address = server.accept()
 
@@ -131,6 +166,12 @@ class TCPStreamServer:
                     if self._stop_event.is_set():
                         break
                     raise
+
+                # stop() may have been called while accept()
+                # was completing.
+                if self._stop_event.is_set():
+                    client_socket.close()
+                    break
 
                 client_id = str(uuid.uuid4())
 
@@ -166,19 +207,19 @@ class TCPStreamServer:
                 pass
 
             with self._lock:
-                connections = list(self._connections.values())
+                connections = list(
+                    self._connections.values()
+                )
 
             for connection in connections:
                 connection.close()
-
-            self._server_socket = None
 
     def send(
         self,
         client_id: str,
         message: Dict[str, Any],
     ) -> None:
-        """Send one JSON message to a specific connected client."""
+        """Send one JSON message to a specific client."""
 
         with self._lock:
             connection = self._connections.get(client_id)
@@ -194,18 +235,18 @@ class TCPStreamServer:
         self,
         message: Dict[str, Any],
     ) -> None:
-        """Send one JSON message to every connected client."""
+        """Send one JSON message to all connected clients."""
 
         with self._lock:
-            connections = list(self._connections.values())
+            connections = list(
+                self._connections.values()
+            )
 
         for connection in connections:
             if connection.connected:
                 try:
                     connection.send(message)
                 except (OSError, ConnectionError):
-                    # A disconnected client should not prevent
-                    # delivery to other connected clients.
                     pass
 
     def _handle_disconnect(self, client_id: str) -> None:
@@ -218,29 +259,50 @@ class TCPStreamServer:
             self.on_disconnect(client_id)
 
     def stop(self) -> None:
-        """Stop accepting clients and close active connections."""
+        """
+        Stop the listener and close active client connections.
 
-        self._stop_event.set()
+        The accept thread is joined before returning.
+        """
 
-        server = self._server_socket
+        with self._lifecycle_lock:
+            self._stop_event.set()
 
-        if server is not None:
-            try:
-                server.close()
-            except OSError:
-                pass
+            server = self._server_socket
+            self._server_socket = None
 
+            thread = self._server_thread
+
+            if server is not None:
+                try:
+                    server.close()
+                except OSError:
+                    pass
+
+        # Close connections outside the lifecycle lock.
         with self._lock:
-            connections = list(self._connections.values())
+            connections = list(
+                self._connections.values()
+            )
 
         for connection in connections:
             connection.close()
-
-        thread = self._server_thread
 
         if (
             thread is not None
             and thread.is_alive()
             and thread is not threading.current_thread()
         ):
-            thread.join(timeout=self.accept_timeout + 1.0)
+            thread.join(
+                timeout=self.accept_timeout + 2.0
+            )
+
+            if thread.is_alive():
+                raise RuntimeError(
+                    "TCP stream server did not stop "
+                    "within the expected timeout."
+                )
+
+        with self._lifecycle_lock:
+            if self._server_thread is thread:
+                self._server_thread = None
