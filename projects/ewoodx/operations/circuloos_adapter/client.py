@@ -112,7 +112,7 @@ class CirculoosClient:
         for attempt in range(2):
             token = self.auth.get_token(
                 service,
-                force_refresh=(attempt == 1),
+                force_refresh=True,
             )
 
             response = self.session.request(
