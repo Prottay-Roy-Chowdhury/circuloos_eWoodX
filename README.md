@@ -21,11 +21,13 @@ The [`framework/`](framework/) package contains reusable components developed in
 
 Its current capabilities include:
 
-- communication and distributed action lifecycle management;
+- communication and distributed Action lifecycle management;
+- persistent bidirectional communication with Agent-aware streaming;
+- generic TCP request-response and file transport;
 - orchestration;
 - persistent workspace and entity management;
-- sensing and camera interfaces;
-- TCP command and file transport.
+- sensing and camera interfaces.
+
 
 For the framework architecture, package structure, development principles, and detailed documentation, see:
 

@@ -96,6 +96,8 @@ Agent
 Execution State
 ```
 
+The communication framework supports both discrete Action coordination and persistent Agent-aware streaming. The Action lifecycle described below applies specifically to the poll-based Action workflow. Streaming communication is independent of that lifecycle and does not require Action persistence.
+
 ## Action
 
 An `Action` represents a unit of distributed work.
@@ -676,6 +678,7 @@ Detailed documentation:
 
 ---
 
+
 # Transport Layer
 
 Directory:
@@ -694,22 +697,30 @@ from framework.communication.transport import (
     TCPServer,
     TCPFileClient,
     TCPFileServer,
+    TCPStreamClient,
+    TCPStreamServer,
 )
 ```
 
-It provides two main communication patterns:
+It currently supports three communication patterns:
 
 ```text
-structured request-response
+request-response
         │
         └── TCPClient / TCPServer
 
 file transfer
         │
         └── TCPFileClient / TCPFileServer
+
+persistent bidirectional streaming
+        │
+        └── TCPStreamClient / TCPStreamServer
 ```
 
 The transport layer knows **how to move information**, but not **what that information means**.
+
+In particular, the TCP streaming transport manages connections and messages, while the workflow layer provides Agent registration and Agent-aware message routing.
 
 Detailed overview:
 
@@ -721,6 +732,7 @@ Detailed TCP protocol and API:
 
 ---
 
+
 # Workflow Layer
 
 Directory:
@@ -729,7 +741,10 @@ Directory:
 framework/communication/workflow/
 ```
 
-The workflow layer connects core models, storage, and transport into the distributed execution lifecycle.
+The workflow layer provides two independent communication workflows:
+
+- **Action workflow:** distributed Action claiming, local execution-state management, polling, and lifecycle synchronization.
+- **Streaming workflow:** persistent bidirectional communication with Agent registration and targeted message routing.
 
 Its public API is:
 
@@ -740,6 +755,8 @@ from framework.communication.workflow import (
     WorkflowClient,
     AgentWorkflowHandler,
     AgentPoller,
+    StreamClient,
+    StreamHandler,
 )
 ```
 
@@ -747,11 +764,19 @@ The responsibilities are:
 
 | Component | Responsibility |
 |---|---|
-| `Coordinator` | Find and claim the next eligible authoritative action. |
-| `WorkflowHandler` | Expose authoritative lifecycle operations as workflow requests. |
-| `WorkflowClient` | Allow an agent to claim work and report lifecycle state remotely. |
-| `AgentWorkflowHandler` | Connect a local executor to the agent's durable workflow state. |
-| `AgentPoller` | Request new work only when the agent has no active local action. |
+| `Coordinator` | Find and claim the next eligible authoritative Action. |
+| `WorkflowHandler` | Expose authoritative Action lifecycle operations as workflow requests. |
+| `WorkflowClient` | Allow an Agent to claim work and report lifecycle state remotely. |
+| `AgentWorkflowHandler` | Connect a local executor to the Agent's durable workflow state. |
+| `AgentPoller` | Request new work only when the Agent has no active local Action. |
+| `StreamClient` | Provide Agent-side streaming, registration, and message exchange. |
+| `StreamHandler` | Manage Agent registrations and route messages over persistent connections. |
+
+The Action workflow uses authoritative and Agent-local storage to coordinate discrete distributed operations.
+
+The streaming workflow operates independently of Action storage and lifecycle management. It uses the transport-independent `Agent` identity model together with the persistent TCP streaming transport.
+
+An application can compose both workflows without coupling their internal responsibilities.
 
 Detailed documentation:
 
@@ -1335,6 +1360,8 @@ from framework.communication.transport import (
     TCPServer,
     TCPFileClient,
     TCPFileServer,
+    TCPStreamClient,
+    TCPStreamServer,
 )
 
 from framework.communication.workflow import (
@@ -1343,6 +1370,8 @@ from framework.communication.workflow import (
     WorkflowClient,
     AgentWorkflowHandler,
     AgentPoller,
+    StreamClient,
+    StreamHandler,
 )
 ```
 
@@ -1356,8 +1385,8 @@ This keeps the architectural layer being used visible in application code.
 |---|---|---|
 | `core` | `Action`, `ActionStatus`, `Agent` | Distributed data models and capability identity. |
 | `storage` | `ActionStore`, `AgentActionStore` | Authoritative and agent-local durable state. |
-| `transport` | `TCPClient`, `TCPServer`, `TCPFileClient`, `TCPFileServer` | Network request-response and file transfer. |
-| `workflow` | `Coordinator`, `WorkflowHandler`, `WorkflowClient`, `AgentWorkflowHandler`, `AgentPoller` | Distributed claiming and execution-state synchronization. |
+| `transport` | `TCPClient`, `TCPServer`, `TCPFileClient`, `TCPFileServer`, `TCPStreamClient`, `TCPStreamServer` | Request-response, file transfer, and persistent bidirectional streaming. |
+| `workflow` | `Coordinator`, `WorkflowHandler`, `WorkflowClient`, `AgentWorkflowHandler`, `AgentPoller`, `StreamClient`, `StreamHandler` | Distributed Action lifecycle coordination and Agent-aware streaming. |
 
 For exact constructors, methods, validation rules, protocols, and detailed examples, continue to the README of the relevant subpackage.
 

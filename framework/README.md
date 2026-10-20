@@ -146,7 +146,7 @@ This means that different areas of the framework are currently at different leve
 
 | Area | Current status | Primary responsibility |
 |---|---|---|
-| `communication` | Implemented and tested | Distributed actions, agents, lifecycle synchronization, transport, and file transfer. |
+| `communication` | Implemented and tested | Distributed Actions and Agents, lifecycle synchronization, request-response communication, file transfer, and persistent Agent-aware streaming. |
 | `orchestration` | Implemented and tested | Ordered workflow definitions and controlled action release. |
 | `workspace` | Implemented and tested | Persistent workspace organization and optional indexed entity management. |
 | `sensing` | Implemented and evolving | Reusable sensing-equipment acquisition and calibration capabilities. |
@@ -332,11 +332,25 @@ The communication framework currently supports:
 - agent polling;
 - TCP request/response communication;
 - generic TCP file transfer;
+- persistent bidirectional TCP JSON streaming;
+- Agent-aware streaming with registration, acknowledgement, and targeted messaging;
+
 - semantic file-resolution boundaries.
+
+
+The communication framework provides two independent workflow models:
+
+- **Action workflow:** coordinates distributed execution through Action claiming, polling, local persistence, and lifecycle synchronization.
+- **Streaming workflow:** supports persistent bidirectional message exchange between registered Agents and a coordinating server.
+
+Both models use the generic communication transport and Agent identity components. The streaming workflow does not depend on Action persistence or lifecycle state.
+
+The detailed implementations are documented in the [Communication Workflow README](communication/workflow/README.md).
+
 
 ---
 
-# Communication Lifecycle
+# Distributed Action Lifecycle
 
 The current distributed action lifecycle is:
 
@@ -874,6 +888,13 @@ entity queries
 entity availability
 camera acquisition / calibration components
 selected application-framework integrations
+TCP persistent bidirectional streaming
+streaming connection lifecycle and reconnection
+streaming concurrency and shutdown behavior
+Agent streaming registration and message routing
+registration rejection and acknowledgement timeout
+streaming workflow robustness and restart
+
 ```
 
 Tests are important architectural evidence.
