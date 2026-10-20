@@ -48,12 +48,14 @@ class CirculoosClient:
         self,
         service: str,
         token: str,
+        tenant: str,
         accept: str,
         content_type: str | None,
+        context: str | None,
     ) -> dict[str, str]:
         headers = {
             "Authorization": f"Bearer {token}",
-            "NGSILD-Tenant": self.config.tenant,
+            "NGSILD-Tenant": tenant,
             "Accept": accept,
         }
 
@@ -63,9 +65,9 @@ class CirculoosClient:
         if content_type:
             headers["Content-Type"] = content_type
 
-        if self.config.context:
+        if context:
             headers["Link"] = (
-                f'<{self.config.context}>; '
+                f'<{context}>; '
                 'rel="http://www.w3.org/ns/json-ld#context"; '
                 'type="application/ld+json"'
             )
@@ -78,6 +80,8 @@ class CirculoosClient:
         method: str,
         endpoint: str,
         *,
+        tenant: str,
+        context: str | None = None,
         params: dict[str, Any] | None = None,
         json_data: Any = None,
         accept: str = "application/json",
@@ -92,6 +96,9 @@ class CirculoosClient:
 
         if "://" in endpoint or "#" in endpoint:
             raise ValueError("Invalid endpoint.")
+
+        if not isinstance(tenant, str) or not tenant.strip():
+            raise ValueError("Tenant must be a non-empty string.")
 
         url = base_url + endpoint
         method = method.upper()
@@ -114,8 +121,10 @@ class CirculoosClient:
                 headers=self._headers(
                     service,
                     token,
+                    tenant,
                     accept,
                     content_type,
+                    context,
                 ),
                 params=params,
                 json=json_data,

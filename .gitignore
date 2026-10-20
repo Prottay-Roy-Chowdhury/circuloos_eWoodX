@@ -31,3 +31,9 @@ venv/
 !**/calibration_data/**
 !**/framework/framework_architecture.png
 !**/projects/ewoodx/ewoodx_architecture.png
+
+# eWoodX CIRCULOOS adapter credentials and tokens
+/projects/ewoodx/operations/circuloos_adapter/partner_variables.txt
+/projects/ewoodx/operations/circuloos_adapter/token.txt
+/projects/ewoodx/operations/circuloos_adapter/tokenMintaka.txt
+/projects/ewoodx/operations/circuloos_adapter/.*.tmp

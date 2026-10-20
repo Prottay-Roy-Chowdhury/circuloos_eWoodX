@@ -1,20 +1,33 @@
 """Configuration for the eWoodX CIRCULOOS adapter."""
 
 from dataclasses import dataclass
-import os
 from pathlib import Path
+
 
 ADAPTER_ROOT = Path(__file__).resolve().parent
 
+PARTNER_VARIABLES_FILE = ADAPTER_ROOT / "partner_variables.txt"
 
-def load_env_file(path: Path | None = None) -> None:
-    """Load simple KEY=VALUE entries without overriding the environment."""
-    path = path or ADAPTER_ROOT / ".env"
+ORION_TOKEN_FILE = ADAPTER_ROOT / "token.txt"
+MINTAKA_TOKEN_FILE = ADAPTER_ROOT / "tokenMintaka.txt"
+
+
+def load_partner_variables(
+    path: Path = PARTNER_VARIABLES_FILE,
+) -> dict[str, str]:
+    """Read the KEY=VALUE format used by CIRCULOOS Bash scripts."""
 
     if not path.is_file():
-        return
+        raise FileNotFoundError(
+            f"CIRCULOOS partner variables file not found: {path}"
+        )
 
-    for line in path.read_text(encoding="utf-8").splitlines():
+    variables = {}
+
+    for line_number, line in enumerate(
+        path.read_text(encoding="utf-8").splitlines(),
+        start=1,
+    ):
         line = line.strip()
 
         if not line or line.startswith("#"):
@@ -23,55 +36,54 @@ def load_env_file(path: Path | None = None) -> None:
         key, separator, value = line.partition("=")
 
         if not separator:
-            raise ValueError(f"Invalid environment entry: {key}")
+            raise ValueError(
+                f"Invalid partner variable at line {line_number}"
+            )
 
-        key = key.strip()
-        value = value.strip().strip('"').strip("'")
-
-        if not key:
-            raise ValueError("Empty environment variable name.")
-
-        os.environ.setdefault(key, value)
-
-
-def required_env(name: str) -> str:
-    value = os.environ.get(name, "").strip()
-
-    if not value:
-        raise ValueError(
-            f"Missing CIRCULOOS configuration: {name}"
+        variables[key.strip()] = (
+            value.strip().strip('"').strip("'")
         )
 
-    return value
+    return variables
 
 
 @dataclass(frozen=True)
 class CirculoosConfig:
     host: str
-    tenant: str
     username: str
     password: str
     orion_secret: str
     mintaka_secret: str
-    context: str | None = None
     timeout: float = 30.0
 
     @classmethod
-    def from_env(cls, env_file: Path | None = None):
-        load_env_file(env_file)
+    def from_partner_file(
+        cls,
+        path: Path = PARTNER_VARIABLES_FILE,
+    ) -> "CirculoosConfig":
+
+        variables = load_partner_variables(path)
+
+        def required(key: str) -> str:
+            value = variables.get(key, "").strip()
+
+            if not value:
+                raise ValueError(
+                    f"Missing required partner variable: {key}"
+                )
+
+            return value
 
         return cls(
-            host=required_env("CIRCULOOS_HOST")
+            host=required("HOST")
                 .removeprefix("https://")
                 .removeprefix("http://")
                 .rstrip("/"),
-            tenant=required_env("CIRCULOOS_TENANT"),
-            username=required_env("CIRCULOOS_USERNAME"),
-            password=required_env("CIRCULOOS_PASSWORD"),
-            orion_secret=required_env("CIRCULOOS_ORION_PEP_SECRET"),
-            mintaka_secret=required_env("CIRCULOOS_MINTAKA_PEP_SECRET"),
-            context=os.getenv("CIRCULOOS_CONTEXT") or None,
-            timeout=float(os.getenv("CIRCULOOS_TIMEOUT", "30")),
+            username=required("PARTNER_USERNAME"),
+            password=required("PARTNER_PASSWORD"),
+            orion_secret=required("ORION_PEP_SECRET"),
+            mintaka_secret=required("MIKTAKA_PEP_SECRET"),
+            timeout=float(variables.get("TIMEOUT", "30")),
         )
 
     @property
