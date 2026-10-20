@@ -1,0 +1,82 @@
+[
+  {
+    "id": "urn:ngsi-ld:others:ewoodx-ramp-test-001",
+    "type": "others",
+    "materialAdTitle": {
+      "type": "Property",
+      "value": "eWoodX reclaimed wood panels - new test",
+      "observedAt": "2026-10-20T16:38:19.598Z"
+    },
+    "materialTypeL0": {
+      "type": "Property",
+      "value": "['RM2026','PM3426']",
+      "observedAt": "2026-10-20T16:38:19.598Z"
+    },
+    "materialTypeL1": {
+      "type": "Property",
+      "value": "['PM3434','WM3434']",
+      "observedAt": "2026-10-20T16:38:19.598Z"
+    },
+    "physicalFormCategory": {
+      "type": "Property",
+      "value": "bySurface",
+      "observedAt": "2026-10-20T16:38:19.598Z"
+    },
+    "imageURL": {
+      "type": "Property",
+      "value": "",
+      "observedAt": "2026-10-20T16:38:19.598Z"
+    },
+    "materialPrice": {
+      "type": "Property",
+      "value": 800,
+      "observedAt": "2026-10-20T16:38:19.598Z"
+    },
+    "availableFrom": {
+      "type": "Property",
+      "value": "2026-10-07",
+      "observedAt": "2026-10-20T16:38:19.598Z"
+    },
+    "materialAdType": {
+      "type": "Property",
+      "value": "Sell",
+      "observedAt": "2026-10-20T16:38:19.598Z"
+    },
+    "materialDescription": {
+      "type": "Property",
+      "value": "New test material created through the eWoodX CIRCULOOS adapter.",
+      "observedAt": "2026-10-20T16:38:19.598Z"
+    },
+    "materialAdStatus": {
+      "type": "Property",
+      "value": "Open",
+      "observedAt": "2026-10-20T16:38:19.598Z"
+    },
+    "materialQuantity": {
+      "type": "Property",
+      "value": 80,
+      "unitCode": "MTK",
+      "observedAt": "2026-10-20T16:38:19.598Z"
+    },
+    "ownedBy": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:ownedBy:ewoodx_material:241d9bbb-4255-4238-8c06-fb9f30cf0a04",
+      "observedAt": "2026-10-20T16:38:19.598Z"
+    },
+    "productionFacility": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:productionFacility:wood_panel_01:6c0b8d78-9158-418a-aef8-c259cd68b972",
+      "observedAt": "2026-10-20T16:38:19.598Z"
+    },
+    "materialToSellOrBuy": {
+      "type": "Property",
+      "value": "PM3434",
+      "observedAt": "2026-10-20T16:38:19.598Z"
+    },
+    "CountryCode": {
+      "type": "Property",
+      "value": "Spain",
+      "observedAt": "2026-10-20T16:38:19.598Z"
+    }
+  }
+]

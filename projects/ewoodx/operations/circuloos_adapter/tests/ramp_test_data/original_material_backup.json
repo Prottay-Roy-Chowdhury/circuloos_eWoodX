@@ -1,0 +1,81 @@
+{
+  "@context": "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context-v1.8.jsonld",
+  "id": "urn:ngsi-ld:others:54b8895d-774d-41ee-91b0-01af0ef77dd0",
+  "type": "others",
+  "materialAdTitle": {
+    "type": "Property",
+    "value": "flooring wood panels",
+    "observedAt": "2026-10-07T16:19:31.404Z"
+  },
+  "materialTypeL0": {
+    "type": "Property",
+    "value": "['RM2026','PM3426']",
+    "observedAt": "2026-10-07T16:19:31.404Z"
+  },
+  "materialTypeL1": {
+    "type": "Property",
+    "value": "['PM3434','WM3434']",
+    "observedAt": "2026-10-07T16:19:31.404Z"
+  },
+  "physicalFormCategory": {
+    "type": "Property",
+    "value": "bySurface",
+    "observedAt": "2026-10-07T16:19:31.404Z"
+  },
+  "imageURL": {
+    "type": "Property",
+    "value": "",
+    "observedAt": "2026-10-07T16:19:31.404Z"
+  },
+  "materialPrice": {
+    "type": "Property",
+    "value": 800,
+    "observedAt": "2026-10-07T16:19:31.404Z"
+  },
+  "availableFrom": {
+    "type": "Property",
+    "value": "2026-10-07",
+    "observedAt": "2026-10-07T16:19:31.404Z"
+  },
+  "materialAdType": {
+    "type": "Property",
+    "value": "Sell",
+    "observedAt": "2026-10-07T16:19:31.404Z"
+  },
+  "materialDescription": {
+    "type": "Property",
+    "value": "",
+    "observedAt": "2026-10-07T16:19:31.404Z"
+  },
+  "materialAdStatus": {
+    "type": "Property",
+    "value": "Open",
+    "observedAt": "2026-10-07T16:19:31.404Z"
+  },
+  "materialQuantity": {
+    "type": "Property",
+    "value": 80,
+    "unitCode": "MTK",
+    "observedAt": "2026-10-07T16:19:31.404Z"
+  },
+  "ownedBy": {
+    "type": "Relationship",
+    "object": "urn:ngsi-ld:ownedBy:ewoodx_material:241d9bbb-4255-4238-8c06-fb9f30cf0a04",
+    "observedAt": "2026-10-07T16:19:31.404Z"
+  },
+  "productionFacility": {
+    "type": "Relationship",
+    "object": "urn:ngsi-ld:productionFacility:wood_panel_01:6c0b8d78-9158-418a-aef8-c259cd68b972",
+    "observedAt": "2026-10-07T16:19:31.404Z"
+  },
+  "materialToSellOrBuy": {
+    "type": "Property",
+    "value": "PM3434",
+    "observedAt": "2026-10-07T16:19:31.404Z"
+  },
+  "CountryCode": {
+    "type": "Property",
+    "value": "Spain",
+    "observedAt": "2026-10-07T16:19:31.404Z"
+  }
+}
