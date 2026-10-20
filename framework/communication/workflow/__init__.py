@@ -19,10 +19,22 @@ from framework.communication.workflow.agent_poller import (
 )
 
 
+from framework.communication.workflow.stream_client import (
+    StreamClient,
+)
+
+from framework.communication.workflow.stream_handler import (
+    StreamHandler,
+)
+
+
+
 __all__ = [
     "Coordinator",
     "WorkflowHandler",
     "WorkflowClient",
     "AgentWorkflowHandler",
     "AgentPoller",
+    "StreamClient",
+    "StreamHandler",
 ]
