@@ -149,3 +149,67 @@ class OrionClient:
             entity["id"]
             for entity in entities
         ]
+    
+    # --------------------------------------------------
+    # Create or update entities
+    # --------------------------------------------------
+
+    def upsert_entities(
+        self,
+        entities: list[dict],
+        *,
+        tenant: str,
+        context: str | None = None,
+    ) -> None:
+        """Create or update NGSI-LD entities through Orion-LD."""
+
+        if not isinstance(entities, list) or not entities:
+            raise ValueError(
+                "Entities must be a non-empty list."
+            )
+
+        for entity in entities:
+            if not isinstance(entity, dict):
+                raise ValueError(
+                    "Each entity must be a dictionary."
+                )
+
+            if not entity.get("id") or not entity.get("type"):
+                raise ValueError(
+                    "Each entity must contain an ID and type."
+                )
+
+        self.request(
+            method="POST",
+            endpoint="/ngsi-ld/v1/entityOperations/upsert",
+            tenant=tenant,
+            context=context,
+            json_data=entities,
+            accept="application/json",
+            content_type="application/json",
+        )
+
+    # --------------------------------------------------
+    # Delete entity
+    # --------------------------------------------------
+
+    def delete_entity(
+        self,
+        entity_id: str,
+        *,
+        tenant: str,
+        context: str | None = None,
+    ) -> None:
+        """Delete an NGSI-LD entity from Orion-LD."""
+
+        if not entity_id:
+            raise ValueError("entity_id must not be empty")
+
+        encoded_id = self.client.encode_entity_id(entity_id)
+
+        self.request(
+            method="DELETE",
+            endpoint=f"/ngsi-ld/v1/entities/{encoded_id}",
+            tenant=tenant,
+            context=context,
+        )
