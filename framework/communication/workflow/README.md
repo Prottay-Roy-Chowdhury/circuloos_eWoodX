@@ -1,36 +1,15 @@
 # Communication Workflow
 
-The `framework.communication.workflow` package coordinates the distributed lifecycle of actions between an authoritative action store and agent-local execution state.
+The `framework.communication.workflow` package provides reusable communication workflows for distributed agents.
 
-It connects the framework's core models, storage layer, and transport layer into a reusable distributed workflow:
+It currently supports two independent communication models:
 
-```text
-authoritative actions
-        │
-        ▼
-eligible agent claims work
-        │
-        ▼
-action persisted locally
-        │
-        ▼
-local executor consumes action
-        │
-        ▼
-RUNNING reported
-        │
-        ▼
-operation executes
-        │
-        ▼
-terminal result stored locally
-        │
-        ▼
-terminal result reported
-        │
-        ▼
-local action released
-```
+1. **Action workflow** — poll-based distributed action claiming, local execution-state persistence, and lifecycle synchronization.
+2. **Streaming workflow** — persistent bidirectional communication between registered agents and a coordinating server.
+
+Both models use the generic communication core and transport layers, but they serve different purposes and do not depend on each other.
+
+The action workflow coordinates discrete units of work with durable execution state. The streaming workflow provides ongoing asynchronous message exchange between connected agents.
 
 The public API is:
 
@@ -41,48 +20,70 @@ from framework.communication.workflow import (
     WorkflowClient,
     AgentWorkflowHandler,
     AgentPoller,
+    StreamClient,
+    StreamHandler,
 )
 ```
 
 ## Responsibility
 
-The workflow layer provides:
+The workflow package provides:
 
-- discovery and claiming of eligible pending actions;
-- workflow request handling around an authoritative `ActionStore`;
-- agent-side workflow communication;
-- persistence of remotely claimed actions into an `AgentActionStore`;
-- polling for new work;
-- local action consumption;
-- synchronization of `RUNNING` state;
-- synchronization of terminal outcomes.
+### Action workflow
 
-It does **not**:
+- Discovery and claiming of eligible pending actions.
+- Authoritative workflow request handling.
+- Agent-side action lifecycle communication.
+- Persistence of claimed actions in an `AgentActionStore`.
+- Polling for new work.
+- Local action consumption.
+- Synchronization of `RUNNING` and terminal states.
 
-- define project-specific operations;
-- execute the operation represented by an action;
-- define orchestration sequences;
-- create project-specific actions;
-- implement TCP socket mechanics;
-- define persistent workspace or entity structures.
+### Streaming workflow
 
-Those responsibilities belong to other framework or application layers.
+- Agent registration over persistent TCP streaming connections.
+- Registration acknowledgement and rejection.
+- Association of active connections with `Agent` identities.
+- Bidirectional asynchronous message exchange.
+- Targeted server-to-agent communication.
+- Connection and registration lifecycle management.
+
+The workflow package does not:
+
+- Execute application-specific operations.
+- Define orchestration sequences.
+- Implement socket mechanics or JSON framing.
+- Define persistent workspace or entity structures.
+- Automatically persist or replay streamed application messages.
+- Provide authentication, encryption, or guaranteed message delivery.
+
+Those responsibilities belong to other framework or application layers, or remain outside the currently implemented capabilities.
+
 
 ---
+
 
 # Package Structure
 
 ```text
 workflow/
 ├── __init__.py
+│
 ├── coordinator.py
 ├── handler.py
 ├── client.py
 ├── agent_handler.py
-└── agent_poller.py
+├── agent_poller.py
+│
+├── stream_client.py
+├── stream_handler.py
+│
+└── README.md
 ```
 
-The components divide naturally between the authoritative side and the agent side:
+The package contains two independent groups of components.
+
+### Action workflow
 
 ```text
 AUTHORITATIVE SIDE
@@ -95,19 +96,42 @@ Coordinator
     ▼
 WorkflowHandler
     │
-    │ transport
+    │ request-response transport
     ▼
-
 AGENT SIDE
 
 WorkflowClient
     │
     ├── AgentActionStore
-    │
     ├── AgentPoller
-    │
     └── AgentWorkflowHandler
 ```
+
+### Streaming workflow
+
+```text
+          COORDINATING SIDE
+
+             StreamHandler
+                   │
+                   ▼
+            TCPStreamServer
+                   │
+                   │ persistent TCP
+                   │ bidirectional
+                   │
+            TCPStreamClient
+                   ▲
+                   │
+              StreamClient
+
+                AGENT SIDE
+```
+
+The streaming workflow can maintain multiple registered Agent connections through one `StreamHandler`.
+
+The two workflow models may be composed by the same application, but neither requires the other.
+
 
 ---
 
@@ -1252,7 +1276,595 @@ terminal_reported == True
 
 The agent should not accept new work before that synchronization completes.
 
+
 ---
+
+# Streaming Workflow
+
+The streaming workflow provides persistent bidirectional communication between distributed agents and a coordinating server.
+
+It is implemented by:
+
+- `StreamClient` — agent-side connection, registration, and message interface.
+- `StreamHandler` — coordinating-side registration management and Agent-aware message dispatch.
+
+The workflow uses:
+
+- `Agent` from `framework.communication.core`;
+- `TCPStreamClient` and `TCPStreamServer` from `framework.communication.transport`.
+
+Unlike the action workflow, the streaming workflow does not claim Actions, modify `ActionStatus`, or interact with `ActionStore` or `AgentActionStore`.
+
+## Communication Model
+
+```text
+                 STREAM HANDLER
+                  coordinating
+                      side
+                       │
+              ┌────────┼────────┐
+              │        │        │
+              ▼        ▼        ▼
+           Agent A  Agent B  Agent C
+              │        │        │
+              └────────┼────────┘
+                       │
+             persistent bidirectional
+                 TCP connections
+```
+
+Each registered Agent has its own transport connection.
+
+The coordinating side can send a message to a specific Agent by its `agent_id`.
+
+Agents can send application messages to the coordinating side through their persistent connections.
+
+Messages are dictionaries encoded as framed JSON by the underlying TCP transport.
+
+---
+
+# StreamClient
+
+```python
+class StreamClient
+```
+
+`StreamClient` provides the agent-side streaming workflow interface.
+
+It combines a transport-independent `Agent` identity with a persistent `TCPStreamClient`.
+
+## Constructor
+
+```python
+StreamClient(
+    agent: Agent,
+    host: str,
+    port: int,
+    on_message: Callable[[dict], None],
+    on_disconnect: Callable[[], None] | None = None,
+    registration_timeout: float = 5.0,
+)
+```
+
+Parameters:
+
+| Parameter | Purpose |
+|---|---|
+| `agent` | Agent identity and capabilities to register. |
+| `host` | Coordinating server address. |
+| `port` | Streaming server port. |
+| `on_message` | Callback for incoming application messages. |
+| `on_disconnect` | Optional callback invoked on disconnection. |
+| `registration_timeout` | Maximum time to wait for registration acknowledgement, in seconds. |
+
+`agent` must be an `Agent`, `on_message` must be callable, and `registration_timeout` must be positive.
+
+## Public Attributes and Properties
+
+```python
+stream_client.agent
+stream_client.on_message
+stream_client.on_disconnect
+stream_client.registration_timeout
+stream_client.tcp_client
+
+stream_client.connected
+stream_client.registered
+```
+
+`connected` indicates the underlying TCP connection state.
+
+`registered` indicates that the Agent has received a successful registration acknowledgement and remains connected.
+
+These states are distinct:
+
+```text
+TCP connected
+     │
+     ▼
+registration requested
+     │
+     ▼
+registration acknowledged
+     │
+     ▼
+Agent registered
+```
+
+A connected transport is not necessarily a registered Agent.
+
+## `connect()`
+
+```python
+stream_client.connect()
+```
+
+Establishes the TCP connection, sends the Agent registration request, and waits for acknowledgement.
+
+The registration request is:
+
+```python
+{
+    "type": "agent_register",
+    "agent": agent.to_dict(),
+}
+```
+
+The method returns successfully only after receiving an accepted registration response.
+
+A rejected registration raises `ConnectionError`.
+
+A missing acknowledgement within `registration_timeout` raises `TimeoutError`.
+
+On registration failure, the client closes the underlying connection.
+
+## `send()`
+
+```python
+stream_client.send(message: dict)
+```
+
+Sends an application message through the registered connection.
+
+Example:
+
+```python
+stream_client.send({
+    "type": "sensor_data",
+    "value": 42,
+})
+```
+
+The client must be registered before sending application messages.
+
+The following message types are reserved for the registration protocol:
+
+```text
+agent_register
+agent_registered
+agent_rejected
+```
+
+Applications must not send these through `StreamClient.send()`.
+
+## `close()`
+
+```python
+stream_client.close()
+```
+
+Closes the underlying TCP connection and clears the client's registered state.
+
+## Reconnection
+
+Reconnection is explicit.
+
+After disconnection or registration rejection, the application may call `connect()` again.
+
+Automatic reconnection, application message replay, and restoration of previous application state are not provided.
+
+---
+
+# StreamHandler
+
+```python
+class StreamHandler
+```
+
+`StreamHandler` provides coordinating-side registration management and Agent-aware message dispatch.
+
+It wraps a generic `TCPStreamServer` and maintains mappings between registered Agent IDs and active transport connections.
+
+## Constructor
+
+```python
+StreamHandler(
+    host: str,
+    port: int,
+    on_message: Callable[[Agent, dict], None],
+)
+```
+
+The callback receives:
+
+```python
+on_message(agent, message)
+```
+
+where `agent` is the registered `Agent` associated with the connection.
+
+## Public Attributes and Properties
+
+```python
+stream_handler.on_message
+stream_handler.tcp_server
+stream_handler.connected_agents
+```
+
+`connected_agents` returns the IDs of currently registered Agents.
+
+## `start()`
+
+```python
+stream_handler.start()
+```
+
+Starts the underlying TCP streaming server.
+
+The server supports multiple concurrent transport connections.
+
+## `stop()`
+
+```python
+stream_handler.stop()
+```
+
+Stops the streaming server and closes its active connections.
+
+Disconnection callbacks remove the associated Agent registrations.
+
+## `send()`
+
+```python
+stream_handler.send(
+    agent_id: str,
+    message: dict,
+)
+```
+
+Sends an application message to the registered Agent identified by `agent_id`.
+
+Example:
+
+```python
+stream_handler.send(
+    "sensing_pc_01",
+    {
+        "type": "control",
+        "value": "start",
+    },
+)
+```
+
+If the Agent is not registered, `ConnectionError` is raised.
+
+The handler does not expose a workflow-level broadcast method. Applications needing broadcast behavior can iterate over `connected_agents` and call `send()` for each registered Agent.
+
+---
+
+# Registration Protocol
+
+Agent registration is required before the coordinating side dispatches application messages.
+
+## Successful Registration
+
+```text
+StreamClient                     StreamHandler
+     │                                │
+     │       TCP connection           │
+     ├───────────────────────────────►│
+     │                                │
+     │       agent_register           │
+     ├───────────────────────────────►│
+     │                                │
+     │                          validate Agent
+     │                          check duplicate ID
+     │                          store registration
+     │                                │
+     │       agent_registered         │
+     │◄───────────────────────────────┤
+     │                                │
+     ▼                                ▼
+registered                       registered
+```
+
+Request:
+
+```python
+{
+    "type": "agent_register",
+    "agent": {
+        "agent_id": "sensing_pc_01",
+        "roles": ["sensing"],
+        "metadata": {},
+    },
+}
+```
+
+Acknowledgement:
+
+```python
+{
+    "type": "agent_registered",
+    "agent_id": "sensing_pc_01",
+}
+```
+
+The acknowledgement identifies the accepted Agent.
+
+`StreamClient.connect()` waits for this response before completing.
+
+## Registration Rejection
+
+The server rejects invalid registrations and duplicate Agent IDs.
+
+A rejection response has the structure:
+
+```python
+{
+    "type": "agent_rejected",
+    "reason": "...",
+}
+```
+
+For example:
+
+```python
+{
+    "type": "agent_rejected",
+    "reason": "Agent already connected: sensing_pc_01",
+}
+```
+
+The client converts registration rejection into `ConnectionError` and closes its connection.
+
+The coordinating side also rejects application messages received from connections that have not registered an Agent.
+
+The current handler sends a rejection response but does not forcibly disconnect every rejected raw transport client.
+
+## Duplicate Agent IDs
+
+Only one active registration is allowed for a given Agent ID.
+
+When two connections attempt to register the same Agent ID concurrently, only one registration can succeed.
+
+The registration mappings are protected by a lock.
+
+A rejected duplicate does not replace or disconnect the existing registered Agent.
+
+## Connection Cleanup
+
+When a registered connection disconnects, the handler removes its Agent registration and connection mappings.
+
+This makes the Agent ID available for a later registration.
+
+---
+
+# Streaming Workflow Example
+
+The following example demonstrates communication between one coordinating server and one Agent.
+
+## Coordinating Side
+
+```python
+from framework.communication.workflow import (
+    StreamHandler,
+)
+
+
+def on_agent_message(agent, message):
+    print(
+        f"Received from {agent.agent_id}:",
+        message,
+    )
+
+
+handler = StreamHandler(
+    host="127.0.0.1",
+    port=6005,
+    on_message=on_agent_message,
+)
+
+handler.start()
+```
+
+The server starts its background accept loop and can then receive Agent registrations.
+
+## Agent Side
+
+```python
+from framework.communication.core import Agent
+from framework.communication.workflow import StreamClient
+
+
+def on_master_message(message):
+    print("Received from coordinator:", message)
+
+
+agent = Agent(
+    agent_id="sensing_pc_01",
+    roles=["sensing"],
+)
+
+client = StreamClient(
+    agent=agent,
+    host="127.0.0.1",
+    port=6005,
+    on_message=on_master_message,
+)
+
+client.connect()
+
+client.send({
+    "type": "sensor_data",
+    "value": 42,
+})
+```
+
+After successful registration, the coordinating side can send a targeted message:
+
+```python
+handler.send(
+    "sensing_pc_01",
+    {
+        "type": "control",
+        "value": "start",
+    },
+)
+```
+
+The Agent receives this message through its `on_message` callback.
+
+The applications should close their respective connections and server during shutdown:
+
+```python
+client.close()
+handler.stop()
+```
+
+The examples assume the coordinating and Agent code run in separate execution contexts or that the server is already running.
+
+---
+
+# Streaming Lifecycle
+
+The Agent-side lifecycle is:
+
+```text
+DISCONNECTED
+     │
+     │ connect()
+     ▼
+TCP CONNECTED
+     │
+     │ agent_register
+     ▼
+REGISTERING
+     │
+     ├── accepted ──► REGISTERED
+     │                    │
+     │                    ├── send messages
+     │                    ├── receive messages
+     │                    └── disconnect
+     │                             │
+     │                             ▼
+     │                       DISCONNECTED
+     │
+     ├── rejected ──► DISCONNECTED
+     │
+     └── timeout ───► DISCONNECTED
+```
+
+These are conceptual connection and registration states, not members of `ActionStatus`.
+
+The streaming workflow does not maintain an authoritative persistent state machine for application messages.
+
+---
+
+# Relationship to the Action Workflow
+
+The action workflow and streaming workflow are independent.
+
+| Aspect | Action Workflow | Streaming Workflow |
+|---|---|---|
+| Main purpose | Distributed execution lifecycle | Ongoing message exchange |
+| Communication | Request-response and polling | Persistent bidirectional TCP |
+| Agent identity | `Agent` | `Agent` |
+| Authoritative ActionStore | Required | Not required |
+| AgentActionStore | Used for local durability | Not required |
+| ActionStatus transitions | Managed | Not managed |
+| Registration handshake | Not used | Required |
+| Application execution | External | External |
+| Automatic message persistence | Action-state persistence | Not provided |
+
+An application may use both workflows simultaneously.
+
+For example, discrete operations may be coordinated through Actions while continuous sensor updates are exchanged through streaming.
+
+However, streaming messages do not automatically create, claim, or complete Actions.
+
+---
+
+# Streaming Delivery and Security Boundaries
+
+The registration protocol establishes an association between a TCP connection and an Agent identity supplied by the connecting client.
+
+It is not an authentication mechanism.
+
+The current streaming workflow does not provide:
+
+- Authentication or authorization.
+- TLS encryption.
+- Automatic reconnection.
+- Application-level delivery acknowledgements.
+- Durable streaming message storage.
+- Automatic message replay.
+- Deduplication or exactly-once processing.
+- Automatic recovery of application state.
+
+A successful transport send does not prove that the receiving application has processed a message.
+
+Applications requiring stronger guarantees must implement the appropriate higher-level mechanisms.
+
+Callbacks run on transport receive threads, so application callbacks should avoid long-running blocking operations.
+
+---
+
+# Streaming Tests
+
+The streaming workflow is tested separately from the poll-based Action workflow.
+
+## Integration Tests
+
+```bash
+python -m framework.test_files.test_stream_workflow
+```
+
+The integration suite covers:
+
+- Multiple Agent registrations.
+- Agent-to-coordinator messages.
+- Targeted coordinator-to-Agent messages.
+- Independent disconnections.
+- Continued communication by remaining Agents.
+- Agent reconnection.
+- Duplicate registration rejection.
+- Unregistered message rejection.
+- Controlled shutdown.
+
+## Robustness Tests
+
+```bash
+python -m framework.test_files.test_stream_workflow_robustness
+```
+
+The robustness suite covers:
+
+- Invalid registration payloads.
+- Concurrent duplicate registration attempts.
+- Registration acknowledgement timeout.
+- Reconnection after rejection.
+- Master shutdown, registration cleanup, and restart.
+
+These tests have been executed successfully in the current development environment.
+
+The generic TCP streaming transport also has independent tests covering connection lifecycle, concurrency, reconnection, and shutdown behavior.
+
+The tests establish the behavior of the scenarios exercised; they do not establish guaranteed delivery or reliability across every possible network failure.
+
+
+---
+
 
 # Package API
 
@@ -1265,15 +1877,24 @@ from framework.communication.workflow import (
     WorkflowClient,
     AgentWorkflowHandler,
     AgentPoller,
+    StreamClient,
+    StreamHandler,
 )
 ```
 
 | Object | Purpose |
 |---|---|
-| `Coordinator` | Find and claim the next eligible authoritative action for an agent. |
-| `WorkflowHandler` | Handle generic authoritative workflow commands. |
-| `WorkflowClient` | Agent-side client for claiming work and reporting lifecycle state. |
-| `AgentWorkflowHandler` | Coordinate action consumption and terminal reporting for a local executor. |
-| `AgentPoller` | Poll for new work only when no active local action exists. |
+| `Coordinator` | Find and claim the next eligible authoritative Action. |
+| `WorkflowHandler` | Handle authoritative Action workflow commands. |
+| `WorkflowClient` | Agent-side claiming and lifecycle reporting. |
+| `AgentWorkflowHandler` | Coordinate local Action consumption and terminal reporting. |
+| `AgentPoller` | Poll for work when no active local Action exists. |
+| `StreamClient` | Agent-side persistent streaming, registration, and messaging. |
+| `StreamHandler` | Coordinating-side Agent registration and targeted message dispatch. |
 
-Internal command-specific handler methods and polling thread implementation details are not part of the public API.
+The package intentionally separates poll-based Action coordination from persistent streaming communication.
+
+Transport-level details are documented in:
+
+- [Transport README](../transport/README.md)
+- [TCP Transport README](../transport/tcp/README.md)
