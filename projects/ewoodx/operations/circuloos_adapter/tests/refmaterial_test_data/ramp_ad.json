@@ -1,0 +1,78 @@
+[
+  {
+    "id": "urn:ngsi-ld:others:ewoodx-refmaterial-test-001",
+    "type": "others",
+    "materialAdTitle": {
+      "type": "Property",
+      "value": "[TEST] eWoodX timber refMaterial link"
+    },
+    "materialTypeL0": {
+      "type": "Property",
+      "value": "['RM2026','PM3426']",
+      "observedAt": "2026-10-22T10:53:14.589Z"
+    },
+    "materialTypeL1": {
+      "type": "Property",
+      "value": "['PM3434','WM3434']",
+      "observedAt": "2026-10-22T10:53:14.589Z"
+    },
+    "physicalFormCategory": {
+      "type": "Property",
+      "value": "bySurface"
+    },
+    "imageURL": {
+      "type": "Property",
+      "value": ""
+    },
+    "materialPrice": {
+      "type": "Property",
+      "value": 0
+    },
+    "availableFrom": {
+      "type": "Property",
+      "value": "2026-10-22"
+    },
+    "materialAdType": {
+      "type": "Property",
+      "value": "Sell"
+    },
+    "materialDescription": {
+      "type": "Property",
+      "value": "Temporary CIRCULOOS integration test. Not a commercial offer."
+    },
+    "materialAdStatus": {
+      "type": "Property",
+      "value": "Open"
+    },
+    "materialQuantity": {
+      "type": "Property",
+      "value": 0.02392246,
+      "unitCode": "MTK"
+    },
+    "ownedBy": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:ownedBy:ewoodx_material:241d9bbb-4255-4238-8c06-fb9f30cf0a04",
+      "observedAt": "2026-10-22T10:53:14.589Z"
+    },
+    "productionFacility": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:productionFacility:wood_panel_01:6c0b8d78-9158-418a-aef8-c259cd68b972",
+      "observedAt": "2026-10-22T10:53:14.589Z"
+    },
+    "materialToSellOrBuy": {
+      "type": "Property",
+      "value": "PM3434",
+      "observedAt": "2026-10-22T10:53:14.589Z"
+    },
+    "CountryCode": {
+      "type": "Property",
+      "value": "Spain",
+      "observedAt": "2026-10-22T10:53:14.589Z"
+    },
+    "refMaterial": {
+      "type": "Relationship",
+      "object": "urn:ngsi-ld:wood:ewoodx-refmaterial-test-001",
+      "observedAt": "2026-10-22T10:53:14.589Z"
+    }
+  }
+]

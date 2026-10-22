@@ -1,0 +1,25 @@
+[
+  {
+    "id": "urn:ngsi-ld:wood:ewoodx-refmaterial-test-001",
+    "type": "wood",
+    "length": {
+      "type": "Property",
+      "value": 525.1,
+      "unitCode": "MMT"
+    },
+    "width": {
+      "type": "Property",
+      "value": 46.95,
+      "unitCode": "MMT"
+    },
+    "quantity": {
+      "type": "Property",
+      "value": 0.02392246,
+      "unitCode": "MTK"
+    },
+    "color": {
+      "type": "Property",
+      "value": "#D1BBB0"
+    }
+  }
+]

@@ -1,0 +1,24 @@
+{
+  "@context": "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context-v1.8.jsonld",
+  "id": "urn:ngsi-ld:wood:ewoodx-refmaterial-test-001",
+  "type": "https://raw.githubusercontent.com/european-dynamics-rnd/CIRCULOOS_Data_model/main/material/wood/schema.json#/wood",
+  "https://smartdatamodels.org/dataModel.Transportation/length": {
+    "type": "Property",
+    "value": 525.1,
+    "unitCode": "MMT"
+  },
+  "https://smartdatamodels.org/dataModel.Transportation/width": {
+    "type": "Property",
+    "value": 46.95,
+    "unitCode": "MMT"
+  },
+  "https://raw.githubusercontent.com/european-dynamics-rnd/CIRCULOOS_Data_model/main/material/circularity-commons.json#/quantity": {
+    "type": "Property",
+    "value": 0.023922,
+    "unitCode": "MTK"
+  },
+  "https://smartdatamodels.org/color": {
+    "type": "Property",
+    "value": "#D1BBB0"
+  }
+}
