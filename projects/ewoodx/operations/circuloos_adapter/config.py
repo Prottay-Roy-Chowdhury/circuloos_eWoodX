@@ -11,6 +11,25 @@ PARTNER_VARIABLES_FILE = ADAPTER_ROOT / "partner_variables.txt"
 ORION_TOKEN_FILE = ADAPTER_ROOT / "token.txt"
 MINTAKA_TOKEN_FILE = ADAPTER_ROOT / "tokenMintaka.txt"
 
+# ------------------------------------------------------------------
+# RAMP advertisement mapping defaults
+# ------------------------------------------------------------------
+
+RAMP_OWNER_URN = (
+    "urn:ngsi-ld:ownedBy:ewoodx_material:"
+    "241d9bbb-4255-4238-8c06-fb9f30cf0a04"
+)
+
+RAMP_PRODUCTION_FACILITY_URN = (
+    "urn:ngsi-ld:productionFacility:wood_panel_01:"
+    "6c0b8d78-9158-418a-aef8-c259cd68b972"
+)
+
+RAMP_COUNTRY = "Spain"
+
+RAMP_AD_TYPE = "Sell"
+RAMP_AD_STATUS = "Open"
+RAMP_PHYSICAL_FORM = "bySurface"
 
 def load_partner_variables(
     path: Path = PARTNER_VARIABLES_FILE,
