@@ -323,6 +323,25 @@ THICKNESS_PLATES = {
 }
 
 
+# ---------------------------------------------------------------------
+# Hand-drawn shape detection
+# ---------------------------------------------------------------------
+
+HANDDRAW_MODEL_PATH = (
+    EWOODX_PROJECT_ROOT
+    / "operations"
+    / "vision"
+    / "detection"
+    / "models"
+    / "handdraw"
+    / "best.pt"
+)
+
+HANDDRAW_DEVICE = "cpu"
+HANDDRAW_CONFIDENCE = 0.15
+HANDDRAW_IMAGE_SIZE = 640
+HANDDRAW_IOU = 0.45
+
 
 # ---------------------------------------------------------------------
 # Arducam measurement setup
