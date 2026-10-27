@@ -283,6 +283,48 @@ MULTI_TIMBER_MIN_HOLE_AREA_PX = 500
 
 
 # ---------------------------------------------------------------------
+# Thickness reference plate detection
+# ---------------------------------------------------------------------
+
+THICKNESS_PLATE_DIAMETER_MM = 100.0
+THICKNESS_PLATE_MIN_CIRCULARITY = 0.65
+THICKNESS_PLATE_DIAMETER_TOLERANCE = 0.35
+
+THICKNESS_PLATES = {
+    "red": {
+        "thickness_mm": 10.0,
+        "hsv_ranges": [
+            {"lower": (0, 120, 35), "upper": (15, 255, 255)},
+            {"lower": (165, 120, 35), "upper": (180, 255, 255)},
+        ],
+        "display_color_bgr": (0, 0, 255),
+    },
+    "blue": {
+        "thickness_mm": 20.0,
+        "hsv_ranges": [
+            {"lower": (95, 100, 35), "upper": (135, 255, 255)},
+        ],
+        "display_color_bgr": (255, 100, 0),
+    },
+    "green": {
+        "thickness_mm": 30.0,
+        "hsv_ranges": [
+            {"lower": (35, 70, 35), "upper": (85, 255, 255)},
+        ],
+        "display_color_bgr": (0, 200, 0),
+    },
+    "yellow": {
+        "thickness_mm": 40.0,
+        "hsv_ranges": [
+            {"lower": (20, 100, 50), "upper": (35, 255, 255)},
+        ],
+        "display_color_bgr": (0, 255, 255),
+    },
+}
+
+
+
+# ---------------------------------------------------------------------
 # Arducam measurement setup
 # ---------------------------------------------------------------------
 

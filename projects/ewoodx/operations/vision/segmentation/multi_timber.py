@@ -259,7 +259,7 @@ class MultiTimberSegmenter:
 
             curtain_domain = usable_roi.copy()
 
-        # NOTE:
+        # note:
         # The reference implementation computes curtain_domain
         # but does not apply it to timber_raw.
         #
