@@ -12,6 +12,7 @@ Responsibilities:
     - Internal hole areas
     - Net surface area
     - Metric contours and corners
+    - JSON-compatible per-timber measurement assembly
 
 This module does not:
     - Perform timber segmentation
@@ -19,13 +20,16 @@ This module does not:
     - Detect thickness plates
     - Sample timber color
     - Allocate timber IDs
-    - Create or save measurements.json
+    - Save measurements.json
     - Communicate with CIRCULOOS
 """
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
+from copy import deepcopy
+import json
+import math
 
 import cv2
 import numpy as np
@@ -609,3 +613,117 @@ def calculate_timber_geometry(
         ],
         "hole_count": len(holes_mm),
     }
+
+# Default reference frame retained from the operational eWoodX composer.
+DEFAULT_REFERENCE_FRAME = {
+    "origin_marker_id": 1,
+    "origin_mm": [0.0, 0.0, 0.0],
+    "x_axis": [1.0, 0.0, 0.0],
+    "y_axis": [0.0, 1.0, 0.0],
+    "z_axis": [0.0, 0.0, 1.0],
+    "description": (
+        "Origin at Marker 1 outer corner; +X towards Marker 0; "
+        "+Y towards Marker 2."
+    ),
+}
+
+GEOMETRY_FIELDS = (
+    "length_mm",
+    "width_mm",
+    "gross_surface_area_mm2",
+    "total_hole_area_mm2",
+    "surface_area_mm2",
+    "surface_area_cm2",
+    "side_lengths_mm",
+    "corners_mm",
+    "contour_mm",
+    "holes_mm",
+    "inner_contours_mm",
+    "hole_count",
+)
+
+
+def build_timber_measurement(
+    geometry: Mapping[str, Any],
+    color: Mapping[str, Any],
+    timber_thickness_mm: float = 0.0,
+    thickness_source: str = "manual",
+    marker_info: Any = None,
+    homography_reprojection_error_mm: float | None = None,
+    reference_frame: Mapping[str, Any] | None = None,
+    hand_drawn_shapes: Sequence[Mapping[str, Any]] | None = None,
+    defects: Sequence[Mapping[str, Any]] | None = None,
+    timber_id: str | int | None = None,
+    source_image: str | None = None,
+) -> dict[str, Any]:
+    """Build one JSON-compatible timber measurement without saving it.
+
+    Geometry is the output of calculate_timber_geometry(). The composer
+    remains responsible for obtaining sensing inputs, allocating persistent
+    timber IDs, and writing entity-local files. No capture-level 'timbers'
+    wrapper is introduced.
+    """
+    if not isinstance(geometry, Mapping):
+        raise TypeError("geometry must be a mapping.")
+    missing = [key for key in GEOMETRY_FIELDS if key not in geometry]
+    if missing:
+        raise ValueError("Missing geometry fields: " + ", ".join(missing))
+
+    if not isinstance(color, Mapping):
+        raise TypeError("color must be a mapping.")
+    for field in ("rgb", "hex", "lab"):
+        if field not in color:
+            raise ValueError(f"Missing color field: {field}")
+
+    for field in ("length_mm", "width_mm", "surface_area_mm2"):
+        value = geometry[field]
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"{field} must be numeric.")
+        if not math.isfinite(float(value)) or float(value) <= 0:
+            raise ValueError(f"{field} must be finite and positive.")
+
+    thickness = float(timber_thickness_mm)
+    if not math.isfinite(thickness) or thickness < 0:
+        raise ValueError("timber_thickness_mm must be finite and nonnegative.")
+    if not isinstance(thickness_source, str) or not thickness_source.strip():
+        raise ValueError("thickness_source must be a nonempty string.")
+
+    if homography_reprojection_error_mm is not None:
+        error = float(homography_reprojection_error_mm)
+        if not math.isfinite(error) or error < 0:
+            raise ValueError("Reprojection error must be finite and nonnegative.")
+    else:
+        error = None
+
+    if hand_drawn_shapes is not None and not isinstance(hand_drawn_shapes, (list, tuple)):
+        raise TypeError("hand_drawn_shapes must be a sequence.")
+    if defects is not None and not isinstance(defects, (list, tuple)):
+        raise TypeError("defects must be a sequence.")
+
+    result = {
+        "timber_id": timber_id,
+        "source_image": source_image,
+        "reference_frame": deepcopy(
+            reference_frame if reference_frame is not None
+            else DEFAULT_REFERENCE_FRAME
+        ),
+        "markers_world_mm": deepcopy(
+            marker_info if marker_info is not None else {}
+        ),
+        "homography_reprojection_error_mm": error,
+    }
+    result.update({key: deepcopy(geometry[key]) for key in GEOMETRY_FIELDS})
+    shapes = deepcopy(list(hand_drawn_shapes or []))
+    result.update({
+        "timber_thickness_mm": round(thickness, 1),
+        "thickness_source": thickness_source,
+        "color_rgb": deepcopy(color["rgb"]),
+        "color_hex": deepcopy(color["hex"]),
+        "color_lab": deepcopy(color["lab"]),
+        "defects": deepcopy(list(defects or [])),
+        "hand_drawn_shapes": shapes,
+        "hand_drawn_shape_count": len(shapes),
+    })
+    # Validate JSON serializability before handing data to persistence.
+    json.dumps(result, allow_nan=False)
+    return result
