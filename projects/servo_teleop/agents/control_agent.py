@@ -5,10 +5,15 @@ Master-facing StreamClient :9060
 
 """
 
+from pathlib import Path
+import sys
 from collections import OrderedDict
 import threading
 import time
 import uuid
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from framework.communication.core import Agent
 from framework.communication.workflow import StreamClient
