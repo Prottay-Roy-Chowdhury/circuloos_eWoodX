@@ -1,18 +1,12 @@
-"""ROS-independent Servo teleoperation control state.
+"""ROS-independent Servo master control state.
 
-Responsibilities:
-- Explicit arming and stopping
-- Single active control owner
-- Fixed-axis direction validation
-- Sequence-number checking
-- Command expiration
-- Disarm on agent disconnection
-
-No ROS, networking, or robot-specific libraries.
+Session-scoped commands, sequence validation, owner checks,
+timeouts, and explicit disarming.
 """
 
 import threading
 import time
+import uuid
 
 
 ZERO_AXES = (0, 0, 0)
@@ -28,6 +22,7 @@ class ServoControlState:
 
         self._armed = False
         self._owner = None
+        self._session = None
         self._linear = ZERO_AXES
         self._angular = ZERO_AXES
         self._last_seq = -1
@@ -47,13 +42,12 @@ class ServoControlState:
             raise ValueError(
                 f"{name} must contain three integers: -1, 0, or 1"
             )
-
         return tuple(value)
 
     def _disarm(self, reason):
-        """Internal state transition; caller holds the lock."""
         self._armed = False
         self._owner = None
+        self._session = None
         self._linear = ZERO_AXES
         self._angular = ZERO_AXES
         self._last_seq = -1
@@ -61,7 +55,6 @@ class ServoControlState:
         self._reason = reason
 
     def _expire_if_needed(self):
-        """Expire the current session; caller holds the lock."""
         if (
             self._armed
             and self._last_update is not None
@@ -71,10 +64,6 @@ class ServoControlState:
             self._disarm("command_timeout")
 
     def apply(self, agent_id, message):
-        """Process one message from a registered control agent.
-
-        Raises ValueError for invalid or unauthorized commands.
-        """
         if not isinstance(message, dict):
             raise ValueError("message must be a dictionary")
 
@@ -84,18 +73,21 @@ class ServoControlState:
             self._expire_if_needed()
 
             if command_type == "servo_stop":
-                # Any registered control agent can request a stop.
+                # Preserve the existing global-stop behavior.
+                # This is an emergency disarm request, not
+                # authorization to command movement.
                 self._disarm("explicit_stop")
                 return self.snapshot()
 
             if command_type == "servo_arm":
                 if self._armed:
                     raise ValueError(
-                        f"Control is already owned by {self._owner}"
+                        f"Control already owned by {self._owner}"
                     )
 
                 self._armed = True
                 self._owner = agent_id
+                self._session = uuid.uuid4().hex
                 self._linear = ZERO_AXES
                 self._angular = ZERO_AXES
                 self._last_seq = -1
@@ -109,11 +101,15 @@ class ServoControlState:
 
                 if agent_id != self._owner:
                     raise ValueError(
-                        "Agent does not own the control session"
+                        "Agent does not own control session"
+                    )
+
+                if message.get("session") != self._session:
+                    raise ValueError(
+                        "Invalid or expired master session"
                     )
 
                 seq = message.get("seq")
-
                 if type(seq) is not int or seq < 0:
                     raise ValueError(
                         "seq must be a non-negative integer"
@@ -136,7 +132,6 @@ class ServoControlState:
                 self._last_seq = seq
                 self._last_update = time.monotonic()
                 self._reason = "command_received"
-
                 return self.snapshot()
 
             raise ValueError(
@@ -144,7 +139,6 @@ class ServoControlState:
             )
 
     def check_connections(self, connected_agent_ids):
-        """Disarm if the controlling agent has disconnected."""
         with self._lock:
             self._expire_if_needed()
 
@@ -157,13 +151,12 @@ class ServoControlState:
             return self.snapshot()
 
     def snapshot(self):
-        """Return a consistent copy of the current state."""
         with self._lock:
             self._expire_if_needed()
-
             return {
                 "armed": self._armed,
                 "owner": self._owner,
+                "session": self._session,
                 "linear": list(self._linear),
                 "angular": list(self._angular),
                 "last_seq": self._last_seq,

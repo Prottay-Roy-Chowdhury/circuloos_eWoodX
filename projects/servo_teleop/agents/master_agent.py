@@ -39,14 +39,26 @@ class ServoMaster:
         self._running = threading.Event()
         self._monitor_thread = None
 
+
     def _on_message(self, agent, message):
-        """Handle messages from registered agents."""
+        """Handle a request and echo its correlation identifier."""
         agent_id = agent.agent_id
+        request_type = message.get("type")
+        request_id = message.get("request_id")
 
         try:
             if "servo_control" not in agent.roles:
                 raise ValueError(
                     "Agent does not have servo_control role"
+                )
+
+            if (
+                not isinstance(request_id, str)
+                or not request_id
+                or len(request_id) > 128
+            ):
+                raise ValueError(
+                    "Valid request_id is required"
                 )
 
             state = self.state.apply(
@@ -56,6 +68,8 @@ class ServoMaster:
 
             response = {
                 "type": "servo_ack",
+                "request": request_type,
+                "request_id": request_id,
                 "accepted": True,
                 "state": state,
             }
@@ -63,6 +77,8 @@ class ServoMaster:
         except (TypeError, ValueError) as error:
             response = {
                 "type": "servo_ack",
+                "request": request_type,
+                "request_id": request_id,
                 "accepted": False,
                 "error": str(error),
                 "state": self.state.snapshot(),
@@ -71,7 +87,6 @@ class ServoMaster:
         try:
             self.handler.send(agent_id, response)
         except ConnectionError:
-            # Agent may have disconnected after sending.
             pass
 
     def _monitor(self):
