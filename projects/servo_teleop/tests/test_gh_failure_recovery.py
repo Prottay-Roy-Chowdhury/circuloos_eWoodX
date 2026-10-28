@@ -316,33 +316,38 @@ def test_master_rejection():
             "Master TCP transport remains connected",
         )
 
-        # New GH arm may be locally acknowledged,
-        # but a stopped coordinator must not forward motion.
+        # The GH TCP connection remains available
+        # for diagnostics, but arming is now blocked.
+
+        reply = send_gh(
+            gh, inbox, {"type": "gh_status"}
+        )
+
+        check(
+            reply["accepted"]
+            and reply["control"]["state"] == "FAULT",
+            "GH status reports coordinator fault",
+        )
+
         reply = send_gh(
             gh, inbox, {"type": "gh_arm"}
         )
+
         check(
-            reply["accepted"],
-            "GH interface still responds locally",
+            not reply["accepted"],
+            "Faulted coordinator rejects GH arming",
         )
 
-        new_session = reply["state"]["session"]
-
-        reply = send_axes(
-            gh, inbox, new_session, 0,
-            linear=(1, 0, 0),
-        )
         check(
-            reply["accepted"],
-            "GH interface accepts local input only",
+            reply["control"]["state"] == "FAULT",
+            "Arm rejection includes fault feedback",
         )
-
-        time.sleep(0.15)
 
         check(
             not master.state.snapshot()["armed"],
-            "Faulted coordinator does not rearm master",
+            "Faulted coordinator cannot rearm master",
         )
+
 
 
 def test_service_restart():

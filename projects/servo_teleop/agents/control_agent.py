@@ -1,11 +1,11 @@
-"""ROS-independent two-sided Servo control agent.
+"""Two-sided ROS-independent Servo control agent.
 
-GH TCP interface -> coordinator -> registered StreamClient
--> ServoMaster
+Grasshopper TCP server :9061
+Master-facing StreamClient :9060
 
-Requires session-scoped ServoMaster protocol.
 """
 
+from collections import OrderedDict
 import threading
 import time
 import uuid
@@ -28,18 +28,41 @@ class ServoControlAgent:
         update_hz=20.0,
         input_timeout=0.5,
         arm_timeout=2.0,
+        ack_timeout=0.35,
+        max_pending_axes=10,
     ):
         if update_hz <= 0 or arm_timeout <= 0:
             raise ValueError("Invalid timing configuration")
 
-        self.period = 1.0 / update_hz
-        self.arm_timeout = float(arm_timeout)
+        if ack_timeout <= 0 or max_pending_axes < 1:
+            raise ValueError("Invalid acknowledgement limits")
 
-        self.gh = GrasshopperTCPInterface(
-            host=gh_host,
-            port=gh_port,
-            input_timeout=input_timeout,
-        )
+        self.period = 1.0 / float(update_hz)
+        self.arm_timeout = float(arm_timeout)
+        self.ack_timeout = float(ack_timeout)
+        self.max_pending_axes = int(max_pending_axes)
+
+        self._lock = threading.RLock()
+        self._stop_event = threading.Event()
+        self._arm_event = threading.Event()
+
+        self._phase = "STOPPED"
+        self._reason = "not_started"
+        self._master_fault = False
+
+        self._arm_request_id = None
+        self._arm_response = None
+
+        self._master_armed = False
+        self._master_session = None
+        self._master_seq = 0
+        self._active_gh_session = None
+
+        # request_id -> (monotonic_send_time, master_session)
+        self._pending_axes = OrderedDict()
+
+        self._worker = None
+        self._started = False
 
         self.client = StreamClient(
             agent=Agent(
@@ -52,29 +75,51 @@ class ServoControlAgent:
             on_disconnect=self._on_master_disconnect,
         )
 
-        self._lock = threading.RLock()
-        self._stop_event = threading.Event()
-        self._arm_event = threading.Event()
-
-        self._arm_request_id = None
-        self._arm_response = None
-
-        self._master_armed = False
-        self._master_session = None
-        self._master_fault = False
-        self._master_seq = 0
-        self._active_gh_session = None
-
-        # In-flight axis request IDs belonging to the
-        # current master session.
-        self._pending_axes = set()
-
-        self._worker = None
-        self._started = False
+        self.gh = GrasshopperTCPInterface(
+            host=gh_host,
+            port=gh_port,
+            input_timeout=input_timeout,
+            status_provider=self.control_status,
+        )
 
     @staticmethod
     def _request_id():
         return uuid.uuid4().hex
+
+    def control_status(self):
+        """Thread-safe operational feedback for GH."""
+        with self._lock:
+            return {
+                "state": self._phase,
+                "reason": self._reason,
+                "master_connected": self.client.registered,
+                "master_armed": self._master_armed,
+                "pending_axes": len(self._pending_axes),
+            }
+
+    def _set_phase(self, phase, reason):
+        with self._lock:
+            changed = (
+                phase != self._phase
+                or reason != self._reason
+            )
+            self._phase = phase
+            self._reason = reason
+
+        if changed:
+            print(f"[CONTROL] {phase}: {reason}")
+
+    def _fault(self, reason):
+        with self._lock:
+            if self._master_fault:
+                return
+
+            self._master_fault = True
+            self._phase = "FAULT"
+            self._reason = reason
+            self._arm_event.set()
+
+        print(f"[CONTROL] FAULT: {reason}")
 
     def _on_master_message(self, message):
         if message.get("type") != "servo_ack":
@@ -84,8 +129,6 @@ class ServoControlAgent:
         request_type = message.get("request")
 
         with self._lock:
-            # Only the matching arm acknowledgement can
-            # satisfy the pending arm request.
             if (
                 request_type == "servo_arm"
                 and request_id == self._arm_request_id
@@ -94,29 +137,42 @@ class ServoControlAgent:
                 self._arm_event.set()
                 return
 
-            if (
-                request_type == "servo_axes"
-                and request_id in self._pending_axes
-            ):
-                self._pending_axes.discard(request_id)
-
-                if (
-                    self._master_armed
-                    and not message.get("accepted", False)
-                ):
-                    self._master_fault = True
+            if request_type != "servo_axes":
                 return
 
-            # Old, duplicate, or unrelated acknowledgements
-            # cannot affect the current control session.
+            pending = self._pending_axes.pop(
+                request_id, None
+            )
+
+            if pending is None:
+                # Old or unrelated acknowledgement.
+                return
+
+            _, expected_session = pending
+
+            if not self._master_armed:
+                return
+
+            response_state = message.get("state", {})
+
+            if (
+                not message.get("accepted", False)
+                or not isinstance(response_state, dict)
+                or response_state.get("session")
+                != expected_session
+                or response_state.get("armed") is not True
+            ):
+                self._fault(
+                    "master_axis_ack_rejected_or_invalid"
+                )
 
     def _on_master_disconnect(self):
         with self._lock:
-            self._master_fault = True
-            self._master_armed = False
-            self._master_session = None
-            self._pending_axes.clear()
-            self._arm_event.set()
+            if self._stop_event.is_set():
+                return
+
+        self._fault("master_tcp_disconnected")
+        self._arm_event.set()
 
     def _invalidate_gh(self):
         state = self.gh.snapshot()
@@ -151,6 +207,33 @@ class ServoControlAgent:
             self._send_master_stop()
             print(f"[CONTROL] Master disarmed: {reason}")
 
+        with self._lock:
+            faulted = self._master_fault
+
+        if not faulted and not self._stop_event.is_set():
+            self._set_phase("READY", reason)
+
+    def _check_ack_watchdog(self):
+        """Detect missing acknowledgements and backlog."""
+        with self._lock:
+            if not self._master_armed or self._master_fault:
+                return
+
+            if not self._pending_axes:
+                return
+
+            oldest_time, _ = next(
+                iter(self._pending_axes.values())
+            )
+
+            age = time.monotonic() - oldest_time
+
+            if age > self.ack_timeout:
+                self._fault("master_axis_ack_timeout")
+
+            elif len(self._pending_axes) >= self.max_pending_axes:
+                self._fault("master_axis_ack_backlog")
+
     def _request_master_arm(self, gh_session):
         request_id = self._request_id()
 
@@ -158,6 +241,8 @@ class ServoControlAgent:
             self._arm_request_id = request_id
             self._arm_response = None
             self._arm_event.clear()
+
+        self._set_phase("ARMING", "awaiting_master_ack")
 
         try:
             self.client.send({
@@ -175,7 +260,7 @@ class ServoControlAgent:
 
             state = (
                 response.get("state", {})
-                if response is not None
+                if isinstance(response, dict)
                 else {}
             )
 
@@ -200,9 +285,14 @@ class ServoControlAgent:
             )
 
             if not valid:
-                # An arm request might be processed despite
-                # an acknowledgement timeout. Send a stop.
                 self._send_master_stop()
+
+                if not fault:
+                    self._set_phase(
+                        "READY",
+                        "master_arm_not_confirmed",
+                    )
+
                 return False
 
             with self._lock:
@@ -212,11 +302,11 @@ class ServoControlAgent:
                 self._master_seq = 0
                 self._pending_axes.clear()
 
-            print("[CONTROL] Master armed with new session")
+            self._set_phase("ACTIVE", "master_armed")
             return True
 
         except (ConnectionError, OSError) as exc:
-            print(f"[CONTROL] Master arm failed: {exc}")
+            self._fault(f"master_arm_send_failed: {exc}")
             self._send_master_stop()
             return False
 
@@ -226,32 +316,38 @@ class ServoControlAgent:
                     self._arm_request_id = None
 
     def _send_axes(self, gh_state):
-        request_id = self._request_id()
+        self._check_ack_watchdog()
 
         with self._lock:
-            if not self._master_armed:
+            if self._master_fault or not self._master_armed:
                 return
 
+            if len(self._pending_axes) >= self.max_pending_axes:
+                self._fault("master_axis_ack_backlog")
+                return
+
+            request_id = self._request_id()
             session = self._master_session
             seq = self._master_seq
             self._master_seq += 1
-            self._pending_axes.add(request_id)
 
-        command = {
-            "type": "servo_axes",
-            "request_id": request_id,
-            "session": session,
-            "seq": seq,
-            "linear": gh_state["linear"],
-            "angular": gh_state["angular"],
-        }
+            self._pending_axes[request_id] = (
+                time.monotonic(),
+                session,
+            )
 
         try:
-            self.client.send(command)
-        except (ConnectionError, OSError):
-            with self._lock:
-                self._pending_axes.discard(request_id)
-                self._master_fault = True
+            self.client.send({
+                "type": "servo_axes",
+                "request_id": request_id,
+                "session": session,
+                "seq": seq,
+                "linear": list(gh_state["linear"]),
+                "angular": list(gh_state["angular"]),
+            })
+
+        except (ConnectionError, OSError) as exc:
+            self._fault(f"master_axes_send_failed: {exc}")
 
     def _run(self):
         next_tick = time.monotonic()
@@ -259,26 +355,32 @@ class ServoControlAgent:
         while not self._stop_event.is_set():
             gh_state = self.gh.snapshot()
 
+            self._check_ack_watchdog()
+
             with self._lock:
                 fault = self._master_fault
-                master_armed = self._master_armed
+                armed = self._master_armed
                 active_gh = self._active_gh_session
 
             if fault or not self.client.registered:
-                self._disarm_master(
-                    "master connection/fault"
-                )
+                if not fault:
+                    self._fault("master_not_registered")
+
+                self._disarm_master("master_fault")
                 self._send_master_stop()
                 self._invalidate_gh()
                 self._stop_event.set()
                 break
 
             if not gh_state["armed"]:
-                self._disarm_master(gh_state["reason"])
+                if armed:
+                    self._disarm_master(gh_state["reason"])
 
-            elif master_armed:
+            elif armed:
                 if gh_state["session"] != active_gh:
-                    self._disarm_master("GH session changed")
+                    self._disarm_master(
+                        "GH_session_changed"
+                    )
                 else:
                     self._send_axes(gh_state)
 
@@ -297,11 +399,18 @@ class ServoControlAgent:
 
             self._stop_event.wait(remaining)
 
-        self._disarm_master("control loop stopped")
+        self._disarm_master("coordinator_stopped")
 
     def start(self):
         if self._started:
             raise RuntimeError("Already started")
+
+        # Faults are latched for the lifetime of this instance.
+        with self._lock:
+            if self._master_fault:
+                raise RuntimeError(
+                    "Faulted agent requires a fresh instance"
+                )
 
         self.client.connect()
 
@@ -312,29 +421,32 @@ class ServoControlAgent:
             raise
 
         self._stop_event.clear()
+        self._started = True
+
+        self._set_phase("READY", "operational")
+
         self._worker = threading.Thread(
             target=self._run,
             name="servo-control-coordinator",
             daemon=True,
         )
         self._worker.start()
-        self._started = True
-
-        print("[CONTROL] Master connected")
-        print("[CONTROL] GH TCP interface started")
 
     def status(self):
-        gh_state = self.gh.snapshot()
+        result = self.control_status()
 
         with self._lock:
-            return {
-                "master_connected": self.client.registered,
-                "master_armed": self._master_armed,
-                "master_session": self._master_session,
+            result.update({
                 "master_fault": self._master_fault,
+                "master_session": self._master_session,
                 "master_seq": self._master_seq,
-                "gh": gh_state,
-            }
+                "pending_request_ids": list(
+                    self._pending_axes.keys()
+                ),
+            })
+
+        result["gh"] = self.gh.snapshot()
+        return result
 
     def stop(self):
         self._stop_event.set()
@@ -351,7 +463,15 @@ class ServoControlAgent:
         self._send_master_stop()
         self.gh.stop()
         self.client.close()
-        self._started = False
+
+        with self._lock:
+            self._master_armed = False
+            self._master_session = None
+            self._pending_axes.clear()
+            self._started = False
+
+        if not self._master_fault:
+            self._set_phase("STOPPED", "service_stopped")
 
         print("[CONTROL] Stopped")
 
@@ -364,9 +484,7 @@ def main():
         print("Press Ctrl+C to stop")
 
         while True:
-            time.sleep(1.0)
-
-            if control._stop_event.is_set():
+            if control._stop_event.wait(1.0):
                 break
 
     except KeyboardInterrupt:

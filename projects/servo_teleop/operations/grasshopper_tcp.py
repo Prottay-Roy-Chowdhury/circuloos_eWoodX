@@ -1,12 +1,6 @@
-"""Grasshopper-facing TCP interface for Servo teleoperation.
+"""Grasshopper-facing TCP interface for Servo teleoperation."""
 
-Uses the framework's existing TCPStreamServer.
-No ROS dependency.
-"""
-
-from framework.communication.transport.tcp import (
-    TCPStreamServer,
-)
+from framework.communication.transport.tcp import TCPStreamServer
 
 from projects.servo_teleop.operations.input_state import (
     GrasshopperInputState,
@@ -19,10 +13,10 @@ class GrasshopperTCPInterface:
         host="127.0.0.1",
         port=9061,
         input_timeout=0.5,
+        status_provider=None,
     ):
-        self.state = GrasshopperInputState(
-            input_timeout=input_timeout
-        )
+        self.state = GrasshopperInputState(input_timeout)
+        self.status_provider = status_provider
 
         self.server = TCPStreamServer(
             host=host,
@@ -39,13 +33,48 @@ class GrasshopperTCPInterface:
     def client_ids(self):
         return self.server.client_ids
 
+    def _control_status(self):
+        if self.status_provider is None:
+            return {
+                "state": "STANDALONE",
+                "reason": "no coordinator attached",
+            }
+
+        return self.status_provider()
+
     def _on_message(self, client_id, message):
+        request = (
+            message.get("type")
+            if isinstance(message, dict)
+            else None
+        )
+
         try:
+            control = self._control_status()
+
+            if request in ("gh_arm", "gh_axes"):
+                if control["state"] in ("FAULT", "STOPPED"):
+                    raise ValueError(
+                        "Control unavailable: "
+                        + control["state"]
+                        + " - "
+                        + control.get("reason", "")
+                    )
+
+            if request == "gh_arm":
+                if control["state"] not in (
+                    "READY", "STANDALONE"
+                ):
+                    raise ValueError(
+                        "Cannot arm in state: "
+                        + control["state"]
+                    )
+
             state = self.state.apply(client_id, message)
 
             reply = {
                 "type": "gh_ack",
-                "request": message.get("type"),
+                "request": request,
                 "accepted": True,
                 "state": state,
             }
@@ -53,20 +82,18 @@ class GrasshopperTCPInterface:
         except (ValueError, TypeError) as exc:
             reply = {
                 "type": "gh_ack",
-                "request": (
-                    message.get("type")
-                    if isinstance(message, dict)
-                    else None
-                ),
+                "request": request,
                 "accepted": False,
                 "error": str(exc),
                 "state": self.state.snapshot(),
             }
 
+        # Always include coordinator status, even for rejections.
+        reply["control"] = self._control_status()
+
         try:
             self.server.send(client_id, reply)
         except (ConnectionError, OSError):
-            # Connection may have closed before acknowledgement.
             pass
 
     def _on_disconnect(self, client_id):
@@ -79,12 +106,8 @@ class GrasshopperTCPInterface:
         self.server.start()
 
     def stop(self):
-        # Stop closes the active sockets. Their disconnect
-        # callbacks disarm the owning client.
         self.server.stop()
 
-        # Also ensure the interface cannot retain an armed
-        # state if shutdown occurs without an owner callback.
         state = self.state.snapshot()
         if state["armed"]:
             self.state.disconnected(state["owner"])
@@ -97,7 +120,6 @@ if __name__ == "__main__":
 
     try:
         interface.start()
-        print("[GH INTERFACE] Started on localhost:9061")
 
         while True:
             time.sleep(0.1)
@@ -108,4 +130,3 @@ if __name__ == "__main__":
 
     finally:
         interface.stop()
-        print("[GH INTERFACE] Stopped")
