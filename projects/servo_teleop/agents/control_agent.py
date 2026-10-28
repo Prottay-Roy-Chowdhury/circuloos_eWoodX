@@ -1,408 +1,321 @@
-"""Interactive ROS-independent Servo teleoperation agent.
+"""ROS-independent two-sided Servo control agent.
 
-Uses the existing framework StreamClient.
+GH TCP client -> GrasshopperTCPInterface -> ServoControlAgent
+ServoControlAgent -> StreamClient -> ServoMaster
 
 Run:
     python -m projects.servo_teleop.agents.control_agent
 
-The ServoMaster must already be running.
-
-This application sends directional axis states only.
-It does not connect to ROS or move a robot.
+Start ServoMaster first. No ROS or robot required.
 """
 
-from pathlib import Path
-import sys
 import threading
 import time
-
-
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(PROJECT_ROOT))
 
 from framework.communication.core import Agent
 from framework.communication.workflow import StreamClient
 
-
-HOST = "127.0.0.1"
-PORT = 9060
-UPDATE_HZ = 20.0
-ARM_ACK_TIMEOUT = 2.0
-
-AXES = {
-    "x": 0,
-    "y": 1,
-    "z": 2,
-    "rx": 3,
-    "ry": 4,
-    "rz": 5,
-}
+from projects.servo_teleop.operations.grasshopper_tcp import (
+    GrasshopperTCPInterface,
+)
 
 
 class ServoControlAgent:
     def __init__(
         self,
-        host=HOST,
-        port=PORT,
-        update_hz=UPDATE_HZ,
+        master_host="127.0.0.1",
+        master_port=9060,
+        gh_host="127.0.0.1",
+        gh_port=9061,
+        update_hz=20.0,
+        input_timeout=0.5,
+        arm_timeout=2.0,
     ):
-        if update_hz <= 0:
-            raise ValueError("update_hz must be positive")
+        if update_hz <= 0 or arm_timeout <= 0:
+            raise ValueError("Invalid timing configuration")
 
-        self.update_hz = float(update_hz)
-        self.period = 1.0 / self.update_hz
+        self.period = 1.0 / update_hz
+        self.arm_timeout = arm_timeout
 
-        self.lock = threading.RLock()
-
-        self.axes = [0] * 6
-        self.seq = 0
-        self.armed = False
-
-        self.stop_event = threading.Event()
-        self.worker = None
-
-        self.arm_event = threading.Event()
-        self.awaiting_arm = False
-        self.arm_response = None
+        self.gh = GrasshopperTCPInterface(
+            host=gh_host,
+            port=gh_port,
+            input_timeout=input_timeout,
+        )
 
         self.client = StreamClient(
             agent=Agent(
                 agent_id="servo_control_pc",
                 roles=["servo_control"],
             ),
-            host=host,
-            port=port,
-            on_message=self._on_message,
-            on_disconnect=self._on_disconnect,
+            host=master_host,
+            port=master_port,
+            on_message=self._on_master_message,
+            on_disconnect=self._on_master_disconnect,
         )
 
-    def connect(self):
-        self.client.connect()
+        self._lock = threading.RLock()
+        self._stop_event = threading.Event()
+        self._arm_event = threading.Event()
 
-        if not self.client.registered:
-            raise ConnectionError(
-                "Agent registration failed"
-            )
+        self._arm_pending = False
+        self._arm_accepted = False
+        self._master_armed = False
+        self._master_fault = False
+        self._master_seq = 0
+        self._active_session = None
 
-        print("[CONNECTED] Servo control agent registered")
+        self._worker = None
+        self._started = False
 
-    def _disable_local(self, reason):
-        """Immediately disable the local publishing loop."""
-        with self.lock:
-            self.armed = False
-            self.axes = [0] * 6
-            self.stop_event.set()
-
-        print(f"\n[DISARMED] {reason}")
-
-    def _on_disconnect(self):
-        self._disable_local("TCP connection lost")
-        self.arm_event.set()
-
-    def _on_message(self, message):
+    def _on_master_message(self, message):
         if message.get("type") != "servo_ack":
-            print("[MASTER MESSAGE]", message)
             return
 
-        with self.lock:
-            awaiting_arm = self.awaiting_arm
+        accepted = message.get("accepted", False)
+        state = message.get("state", {})
 
-            if awaiting_arm:
-                self.arm_response = message
-                self.arm_event.set()
-                return
+        with self._lock:
+            if self._arm_pending:
+                # The existing master has no request ID in
+                # acknowledgements. Match its specific arm state.
+                if (
+                    accepted
+                    and state.get("armed") is True
+                    and state.get("reason") == "armed"
+                    and state.get("owner") == "servo_control_pc"
+                ):
+                    self._arm_accepted = True
+                    self._arm_event.set()
+                    return
 
-            active = self.armed
+                if not accepted:
+                    self._arm_accepted = False
+                    self._arm_event.set()
+                    return
 
-        # A rejected command means the current control
-        # session must no longer be trusted.
-        if not message.get("accepted", False) and active:
-            self._disable_local(
-                message.get("error", "Command rejected")
+            if not accepted and self._master_armed:
+                self._master_fault = True
+
+    def _on_master_disconnect(self):
+        with self._lock:
+            self._master_fault = True
+            self._master_armed = False
+            self._arm_event.set()
+
+    def _invalidate_gh(self):
+        """Invalidate a GH session after a master-side fault."""
+        state = self.gh.snapshot()
+
+        if state["armed"]:
+            self.gh.state.apply(
+                state["owner"],
+                {"type": "gh_stop"},
             )
 
-    def arm(self):
-        """Explicitly arm and start continuous publishing."""
-        with self.lock:
-            if self.armed:
-                print("[INFO] Already armed")
-                return
+    def _send_master_stop(self):
+        if self.client.registered:
+            try:
+                self.client.send({"type": "servo_stop"})
+            except (ConnectionError, OSError):
+                pass
 
-            if not self.client.registered:
-                print("[ERROR] Agent is not connected")
-                return
+    def _disarm_master(self, reason):
+        with self._lock:
+            was_armed = self._master_armed
+            self._master_armed = False
+            self._active_session = None
+            self._arm_pending = False
 
-            # Arming always starts at zero velocity.
-            self.axes = [0] * 6
-            self.seq = 0
-            self.arm_response = None
-            self.arm_event.clear()
-            self.awaiting_arm = True
+        if was_armed:
+            self._send_master_stop()
+            print(f"[CONTROL] Master disarmed: {reason}")
+
+    def _request_master_arm(self, session):
+        with self._lock:
+            self._arm_event.clear()
+            self._arm_pending = True
+            self._arm_accepted = False
 
         try:
             self.client.send({"type": "servo_arm"})
 
-            acknowledged = self.arm_event.wait(
-                ARM_ACK_TIMEOUT
+            acknowledged = self._arm_event.wait(
+                self.arm_timeout
             )
 
-            with self.lock:
-                response = self.arm_response
-                self.awaiting_arm = False
+            with self._lock:
+                accepted = self._arm_accepted
+                fault = self._master_fault
 
-            if (
-                not acknowledged
-                or response is None
-                or not response.get("accepted", False)
-                or not response.get("state", {}).get("armed", False)
+            gh_state = self.gh.snapshot()
+
+            if not (
+                acknowledged
+                and accepted
+                and not fault
+                and self.client.registered
+                and gh_state["armed"]
+                and gh_state["session"] == session
+                and gh_state["last_seq"] >= 0
             ):
-                print("[ERROR] Arming was not acknowledged")
+                # The arm request might have been processed
+                # even if its acknowledgement was delayed.
+                self._send_master_stop()
+                return False
 
-                if response is not None:
-                    print(response)
+            with self._lock:
+                self._master_armed = True
+                self._active_session = session
+                self._master_seq = 0
 
-                # If the arm acknowledgement was delayed,
-                # the master may have armed regardless.
-                self._send_stop_best_effort()
-                return
+            print("[CONTROL] Master armed")
+            return True
 
-            if not self.client.registered:
-                print("[ERROR] Connection lost during arming")
-                return
-
-            with self.lock:
-                self.armed = True
-                self.stop_event.clear()
-
-                self.worker = threading.Thread(
-                    target=self._publish_loop,
-                    name="servo-command-stream",
-                    daemon=True,
-                )
-
-                self.worker.start()
-
-            print("[ARMED] Streaming started at "
-                  f"{self.update_hz:g} Hz")
-
-        except Exception as exc:
-            print(f"[ERROR] Arm failed: {exc}")
-            self._send_stop_best_effort()
+        except (ConnectionError, OSError) as exc:
+            print(f"[CONTROL] Master arm failed: {exc}")
+            self._send_master_stop()
+            return False
 
         finally:
-            with self.lock:
-                self.awaiting_arm = False
+            with self._lock:
+                self._arm_pending = False
 
-    def _publish_loop(self):
-        """Send the latest directional state periodically."""
-        next_publish = time.monotonic()
+    def _run(self):
+        next_tick = time.monotonic()
 
-        while not self.stop_event.is_set():
-            if not self.client.registered:
-                self._disable_local(
-                    "Connection not registered"
-                )
+        while not self._stop_event.is_set():
+            gh_state = self.gh.snapshot()
+
+            with self._lock:
+                fault = self._master_fault
+                master_armed = self._master_armed
+                active_session = self._active_session
+
+            if fault or not self.client.registered:
+                self._disarm_master("master connection/fault")
+                self._invalidate_gh()
+                # No automatic reconnection or rearming.
+                self._stop_event.set()
                 break
 
-            with self.lock:
-                if not self.armed:
-                    break
+            if not gh_state["armed"]:
+                self._disarm_master(gh_state["reason"])
 
-                command = {
-                    "type": "servo_axes",
-                    "seq": self.seq,
-                    "linear": list(self.axes[:3]),
-                    "angular": list(self.axes[3:]),
-                }
+            elif master_armed:
+                if gh_state["session"] != active_session:
+                    self._disarm_master("session changed")
 
-                self.seq += 1
+                else:
+                    with self._lock:
+                        seq = self._master_seq
+                        self._master_seq += 1
 
-            try:
-                self.client.send(command)
+                    command = {
+                        "type": "servo_axes",
+                        "seq": seq,
+                        "linear": gh_state["linear"],
+                        "angular": gh_state["angular"],
+                    }
 
-            except Exception as exc:
-                self._disable_local(
-                    f"Command transmission failed: {exc}"
-                )
-                break
+                    try:
+                        self.client.send(command)
+                    except (ConnectionError, OSError):
+                        with self._lock:
+                            self._master_fault = True
 
-            next_publish += self.period
+            elif gh_state["last_seq"] >= 0:
+                # Arm only after fresh axis input is present.
+                session = gh_state["session"]
 
-            remaining = next_publish - time.monotonic()
+                if not self._request_master_arm(session):
+                    self._invalidate_gh()
 
-            # Never transmit a burst of old scheduled commands.
+            next_tick += self.period
+            remaining = next_tick - time.monotonic()
+
             if remaining < 0:
-                next_publish = time.monotonic()
+                next_tick = time.monotonic()
                 remaining = 0
 
-            if self.stop_event.wait(remaining):
-                break
+            self._stop_event.wait(remaining)
 
-    def set_axis(self, axis_name, direction):
-        """Set one axis without modifying the other axes."""
-        with self.lock:
-            if not self.armed:
-                print("[ERROR] Arm the controller first")
-                return
+        self._disarm_master("control loop stopped")
 
-            index = AXES[axis_name]
-            self.axes[index] = direction
+    def start(self):
+        if self._started:
+            raise RuntimeError("Control agent already started")
 
-            self._print_state()
+        # Do not open GH input if master registration fails.
+        self.client.connect()
 
-    def zero(self):
-        """Set every axis to zero while remaining armed."""
-        with self.lock:
-            self.axes = [0] * 6
-            self._print_state()
+        try:
+            self.gh.start()
+        except Exception:
+            self.client.close()
+            raise
 
-    def _print_state(self):
-        print(
-            f"[AXES] linear={self.axes[:3]} "
-            f"angular={self.axes[3:]} "
-            f"armed={self.armed}"
+        self._stop_event.clear()
+        self._worker = threading.Thread(
+            target=self._run,
+            name="servo-control-coordinator",
+            daemon=True,
         )
+        self._worker.start()
+        self._started = True
+
+        print("[CONTROL] Master connected")
+        print("[CONTROL] GH TCP interface started")
 
     def status(self):
-        with self.lock:
-            self._print_state()
-            print(
-                f"[STATUS] connected={self.client.connected} "
-                f"registered={self.client.registered} "
-                f"seq={self.seq}"
-            )
+        gh_state = self.gh.snapshot()
 
-    def _send_stop_best_effort(self):
-        try:
-            if self.client.registered:
-                self.client.send({
-                    "type": "servo_stop"
-                })
-        except Exception as exc:
-            print(f"[WARNING] Stop delivery failed: {exc}")
+        with self._lock:
+            return {
+                "master_connected": self.client.registered,
+                "master_armed": self._master_armed,
+                "master_fault": self._master_fault,
+                "master_seq": self._master_seq,
+                "gh": gh_state,
+            }
 
     def stop(self):
-        """Stop the publishing loop and disarm the master."""
-        with self.lock:
-            self.armed = False
-            self.axes = [0] * 6
-            self.stop_event.set()
-            worker = self.worker
+        self._stop_event.set()
+        self._arm_event.set()
 
         if (
-            worker is not None
-            and worker is not threading.current_thread()
+            self._worker is not None
+            and self._worker is not threading.current_thread()
         ):
-            worker.join(timeout=2.0)
+            self._worker.join(timeout=self.arm_timeout + 2.0)
 
-            if worker.is_alive():
-                print(
-                    "[WARNING] Publisher thread did not "
-                    "stop within timeout"
-                )
-
-        self._send_stop_best_effort()
-
-        with self.lock:
-            self.worker = None
-
-        print("[STOP] Control disarmed locally; stop requested")
-
-    def close(self):
-        self.stop()
+        self._send_master_stop()
+        self.gh.stop()
         self.client.close()
+        self._started = False
 
-
-HELP = """
-Commands
---------------------------------------------------
-arm              Arm the control session
-stop             Stop and disarm
-zero             Set all six axes to zero
-status           Show current state
-
-x+  x-  x0       Linear X positive / negative / zero
-y+  y-  y0       Linear Y positive / negative / zero
-z+  z-  z0       Linear Z positive / negative / zero
-
-rx+ rx- rx0      Angular X positive / negative / zero
-ry+ ry- ry0      Angular Y positive / negative / zero
-rz+ rz- rz0      Angular Z positive / negative / zero
-
-help             Show commands
-quit             Stop and exit
-
-Each axis can be selected independently.
-Commands are refreshed at 20 Hz while armed.
---------------------------------------------------
-"""
+        print("[CONTROL] Stopped")
 
 
 def main():
-    controller = ServoControlAgent()
+    control = ServoControlAgent()
 
     try:
-        controller.connect()
-        print(HELP)
+        control.start()
+        print("Press Ctrl+C to stop")
 
         while True:
-            try:
-                command = input("servo> ").strip().lower()
+            time.sleep(1.0)
 
-            except EOFError:
+            if control._stop_event.is_set():
+                print("[CONTROL] Coordinator stopped")
                 break
-
-            if not command:
-                continue
-
-            if command == "help":
-                print(HELP)
-
-            elif command == "arm":
-                controller.arm()
-
-            elif command == "stop":
-                controller.stop()
-
-            elif command == "zero":
-                controller.zero()
-
-            elif command == "status":
-                controller.status()
-
-            elif command in {"quit", "exit"}:
-                break
-
-            elif (
-                len(command) >= 2
-                and command[:-1] in AXES
-                and command[-1] in "+-0"
-            ):
-                direction = {
-                    "+": 1,
-                    "-": -1,
-                    "0": 0,
-                }[command[-1]]
-
-                controller.set_axis(
-                    command[:-1],
-                    direction,
-                )
-
-            else:
-                print(
-                    "[ERROR] Unknown command. Type help."
-                )
 
     except KeyboardInterrupt:
-        print("\n[INTERRUPTED]")
-
-    except Exception as exc:
-        print(f"[ERROR] {exc}")
+        pass
 
     finally:
-        controller.close()
-        print("[EXIT] Control agent closed")
+        control.stop()
 
 
 if __name__ == "__main__":
