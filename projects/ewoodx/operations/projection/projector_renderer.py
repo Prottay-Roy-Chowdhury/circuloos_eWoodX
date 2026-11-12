@@ -350,6 +350,36 @@ class ProjectorRenderer:
                 cv2.LINE_AA,
             )
 
+        
+        # ---------------------------------------------------------
+        # Timber holes
+        # ---------------------------------------------------------
+
+        hole_contours = self._normalize_contours(
+            data.get("holes_mm", [])
+        )
+
+        for hole in hole_contours:
+            points_px = self._world_to_projector(
+                hole,
+                thickness_mm,
+            )
+
+            if (
+                len(points_px) < 3
+                or not np.isfinite(points_px).all()
+            ):
+                continue
+
+            cv2.polylines(
+                canvas,
+                [self._pixel_points(points_px)],
+                True,
+                timber_bgr,
+                max(1, timber_thickness_px),
+                cv2.LINE_AA,
+            )
+
         # ---------------------------------------------------------
         # Timber corners
         # ---------------------------------------------------------
@@ -359,15 +389,19 @@ class ProjectorRenderer:
             or data.get("timber_corners")
         )
 
-        if corners_raw and len(corners_raw) >= 3:
+        corner_groups = self._normalize_contours(
+            corners_raw
+        )
 
+        for group_index, corner_group in enumerate(
+            corner_groups
+        ):
             corners_px = self._world_to_projector(
-                corners_raw,
+                corner_group,
                 thickness_mm,
             )
 
             for index, point in enumerate(corners_px):
-
                 px = int(round(point[0]))
                 py = int(round(point[1]))
 
@@ -380,9 +414,15 @@ class ProjectorRenderer:
                     cv2.LINE_AA,
                 )
 
+                label = (
+                    f"C{index + 1}"
+                    if len(corner_groups) == 1
+                    else f"T{group_index + 1}C{index + 1}"
+                )
+
                 cv2.putText(
                     canvas,
-                    f"C{index + 1}",
+                    label,
                     (px + 6, py - 6),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.35,

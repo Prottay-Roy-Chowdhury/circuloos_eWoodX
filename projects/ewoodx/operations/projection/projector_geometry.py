@@ -178,73 +178,94 @@ class ProjectorGeometry:
     # -------------------------------------------------------------
     # Sensing measurement preparation
     # -------------------------------------------------------------
-
+    
     @staticmethod
-    def prepare_measurement(
-        measurement: dict,
-    ) -> dict:
+    def prepare_measurement(measurement: dict) -> dict:
         """
-        Prepare sensing measurement data for projection.
+        Convert legacy flat or capture-level sensing data
+        into the renderer's existing flat geometry format.
 
-        Preserves the original measurement fields.
-
-        The existing projector renderer understands:
-        - contour_mm
-        - corners_mm
-        - defects
-        - length_mm
-        - width_mm
-        - thickness_mm
-        - cut_geo
-        - mill_geo
-        - points_geo
-        - labels
-
-        No geometry is generated or altered here.
+        The original input is not modified.
+        GH geometry is handled separately.
         """
 
         if not isinstance(measurement, dict):
-
             raise TypeError(
                 "Measurement must be a dictionary."
             )
 
-        data = copy.deepcopy(
-            measurement
-        )
+        data = copy.deepcopy(measurement)
 
-        if data.get("thickness_mm") is None:
+        timbers = data.get("timbers")
 
-            thickness = data.get(
-                "timber_thickness_mm"
-            )
+        if timbers is not None:
+            if not isinstance(timbers, list):
+                raise ValueError(
+                    "Measurement timbers must be a list."
+                )
 
-            if thickness is not None:
+            contours = []
+            corners = []
+            holes = []
+            defects = []
 
-                data["thickness_mm"] = thickness
+            for timber in timbers:
+                if not isinstance(timber, dict):
+                    raise ValueError(
+                        "Each timber must be a dictionary."
+                    )
 
-        # Add only missing optional geometry collections.
-        # Do not overwrite existing geometry.
+                contour = timber.get("contour_mm") or []
+                if len(contour) >= 3:
+                    contours.append(contour)
 
-        data.setdefault(
-            "cut_geo",
-            [],
-        )
+                timber_corners = timber.get("corners_mm") or []
+                if len(timber_corners) >= 3:
+                    corners.append(timber_corners)
 
-        data.setdefault(
-            "mill_geo",
-            [],
-        )
+                for hole in timber.get("holes_mm") or []:
+                    if len(hole) >= 3:
+                        holes.append(hole)
 
-        data.setdefault(
-            "points_geo",
-            [],
-        )
+                defects.extend(timber.get("defects") or [])
 
-        data.setdefault(
-            "labels",
-            [],
-        )
+            data["contour_mm"] = contours
+            data["corners_mm"] = corners
+            data["holes_mm"] = holes
+            data["defects"] = defects
+
+            if timbers:
+                first = timbers[0]
+
+                data["length_mm"] = first.get(
+                    "length_mm", 0.0
+                )
+                data["width_mm"] = first.get(
+                    "width_mm", 0.0
+                )
+
+                if data.get("thickness_mm") is None:
+                    data["thickness_mm"] = first.get(
+                        "timber_thickness_mm",
+                        first.get("thickness_mm", 0.0),
+                    )
+
+        else:
+            # Legacy flat measurement.
+            if data.get("thickness_mm") is None:
+                data["thickness_mm"] = data.get(
+                    "timber_thickness_mm", 0.0
+                )
+
+            data.setdefault("holes_mm", [])
+
+        data.setdefault("contour_mm", [])
+        data.setdefault("corners_mm", [])
+        data.setdefault("defects", [])
+        data.setdefault("cut_geo", [])
+        data.setdefault("mill_geo", [])
+        data.setdefault("points_geo", [])
+        data.setdefault("labels", [])
 
         return data
 

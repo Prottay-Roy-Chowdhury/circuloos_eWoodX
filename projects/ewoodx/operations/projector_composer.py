@@ -100,7 +100,7 @@ class EWoodXProjectorComposer:
         fullscreen: bool = True,
         frame_delay_ms: int = 16,
         file_poll_interval: float = 0.5,
-        gh_timeout: float = 0.0,
+        gh_timeout: float = 5.0,
         enable_streaming: bool = True,
     ) -> None:
 
@@ -543,11 +543,7 @@ class EWoodXProjectorComposer:
             "homography_file": str(
                 self.homography_file
             ),
-            "local_measurement_enabled": (
-                not state_status[
-                    "live_measurement_received"
-                ]
-            ),
+            "local_measurement_enabled": True,
             "controls": (
                 self.controls.get_parameters()
             ),

@@ -39,6 +39,9 @@ import time
 
 from pathlib import Path
 
+from projects.ewoodx.operations.projection.projector_geometry import (
+    ProjectorGeometry,
+)
 
 class ProjectorState:
     """
@@ -70,6 +73,18 @@ class ProjectorState:
         self.measurement_data = copy.deepcopy(
             initial_data
         )
+
+        # Latest local runtime JSON.
+        self.local_measurement_data = copy.deepcopy(
+            initial_data
+        )
+
+        # Latest sensing stream measurement.
+        self.stream_measurement_data = None
+        self.stream_last_received_monotonic = 0.0
+
+        # Stream is considered active only while fresh.
+        self.sensing_timeout_seconds = 5.0
 
         self.measurement_revision = 0
         self.measurement_last_received_time = 0.0
@@ -213,79 +228,35 @@ class ProjectorState:
             stat.st_mtime_ns,
             stat.st_size,
         )
-
+    
     @staticmethod
     def _read_measurement_file(
         path: Path,
         default_thickness_mm: float = 0.0,
     ) -> dict:
-        """
-        Read a local sensing measurement JSON.
-
-        Preserves the data mapping used by the
-        existing projector composer.
-
-        Design geometry is empty for sensing-only data.
-        """
+        """Load and normalize a local runtime measurement."""
 
         with path.open(
             "r",
             encoding="utf-8",
         ) as handle:
+            raw_data = json.load(handle)
 
-            data = json.load(handle)
-
-        if not isinstance(data, dict):
+        if not isinstance(raw_data, dict):
             raise ValueError(
-                "Measurement JSON must contain "
-                "a dictionary."
+                "Measurement JSON must contain a dictionary."
             )
 
-        thickness = data.get(
-            "thickness_mm"
+        data = ProjectorGeometry.prepare_measurement(
+            raw_data
         )
 
-        if thickness is None:
-            thickness = data.get(
-                "timber_thickness_mm",
-                default_thickness_mm,
-            )
+        data["source"] = path.name
 
-        if thickness is None:
-            thickness = default_thickness_mm
+        if data.get("thickness_mm") is None:
+            data["thickness_mm"] = default_thickness_mm
 
-        return {
-            "source": path.name,
-            "timber_id": data.get(
-                "timber_id",
-                1,
-            ),
-            "length_mm": data.get(
-                "length_mm",
-                0.0,
-            ),
-            "width_mm": data.get(
-                "width_mm",
-                0.0,
-            ),
-            "thickness_mm": thickness,
-            "contour_mm": data.get(
-                "contour_mm",
-                [],
-            ),
-            "corners_mm": data.get(
-                "corners_mm",
-                [],
-            ),
-            "defects": data.get(
-                "defects",
-                [],
-            ),
-            "cut_geo": [],
-            "mill_geo": [],
-            "points_geo": [],
-            "labels": [],
-        }
+        return data
 
     # -------------------------------------------------------------
     # Runtime-based initialization
@@ -383,23 +354,14 @@ class ProjectorState:
 
     def poll_measurement_file(self) -> bool:
         """
-        Check the runtime directory for a new or modified
-        timber measurement JSON.
+        Monitor the latest local runtime measurement.
 
-        Returns True if a measurement was updated.
-
-        Once a valid live sensing measurement is received,
-        local JSON monitoring stops replacing sensing data.
-
-        This method is intended to be called periodically
-        by the projector composer.
+        Local JSON is retained as fallback even after
+        live sensing updates have been received.
         """
 
         with self.lock:
-
-            if self.live_measurement_received:
-                return False
-
+         
             if self.runtime_root is None:
                 return False
 
@@ -512,6 +474,51 @@ class ProjectorState:
         ):
             self.thickness_mm = value
 
+    
+    def _active_sensing_data(self) -> dict:
+        """
+        Select live sensing while fresh, otherwise
+        fall back to the latest local runtime JSON.
+
+        Must be called while holding self.lock.
+        """
+
+        if (
+            self.stream_measurement_data is not None
+            and self.stream_last_received_monotonic > 0.0
+            and (
+                time.monotonic()
+                - self.stream_last_received_monotonic
+            ) <= self.sensing_timeout_seconds
+        ):
+            return self.stream_measurement_data
+
+        return self.local_measurement_data
+
+    def refresh_sensing_source(self) -> bool:
+        """
+        Update the selected sensing data when its source
+        changes or its content has been updated.
+        """
+
+        with self.lock:
+            selected = self._active_sensing_data()
+
+            if selected == self.measurement_data:
+                return False
+
+            self.measurement_data = copy.deepcopy(
+                selected
+            )
+            self.measurement_revision += 1
+
+            if not self._gh_active():
+                self._update_thickness(
+                    self.measurement_data
+                )
+
+            return True
+
     def _gh_active(self) -> bool:
         """
         Return whether Grasshopper geometry is active.
@@ -534,44 +541,36 @@ class ProjectorState:
         from_stream: bool = False,
     ) -> None:
         """
-        Replace the latest sensing measurement.
+        Monitor the latest local runtime measurement.
 
-        A sensing update does not overwrite active GH geometry.
-
-        Set from_stream=True when receiving a measurement
-        from the live eWoodX sensing stream.
-
-        After the first live sensing measurement,
-        local JSON no longer replaces it.
+        Local JSON is retained as fallback even after
+        live sensing updates have been received.
         """
 
-        if not isinstance(
-            measurement,
-            dict,
-        ):
+        if not isinstance(measurement, dict):
             raise TypeError(
                 "measurement must be a dictionary."
             )
 
         with self.lock:
+            prepared = copy.deepcopy(measurement)
 
             if from_stream:
                 self.live_measurement_received = True
 
-            self.measurement_data = copy.deepcopy(
-                measurement
-            )
+                self.stream_measurement_data = prepared
+                self.stream_last_received_monotonic = (
+                    time.monotonic()
+                )
 
-            self.measurement_revision += 1
+            else:
+                self.local_measurement_data = prepared
 
             self.measurement_last_received_time = (
                 time.time()
             )
 
-            if not self._gh_active():
-                self._update_thickness(
-                    measurement
-                )
+            self.refresh_sensing_source()
 
     # -------------------------------------------------------------
     # Grasshopper geometry updates
@@ -781,6 +780,8 @@ class ProjectorState:
         """
 
         with self.lock:
+
+            self.refresh_sensing_source()
 
             if self._gh_active():
 
