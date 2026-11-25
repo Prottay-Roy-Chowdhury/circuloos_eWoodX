@@ -345,6 +345,8 @@ class ProjectorControls:
         - pause
         - resume
         - stop
+        - blank_projection
+        - restore_projection
 
         This preserves the command set of the
         existing projector composer.
@@ -432,6 +434,56 @@ class ProjectorControls:
                     },
                     "action": "resume",
                 }
+
+            
+            # -----------------------------------------------------
+            # Blank projection
+            # -----------------------------------------------------
+
+            elif command == "blank_projection":
+
+                session_id = parameters.get("session_id")
+
+                if (
+                    not isinstance(session_id, str)
+                    or not session_id.strip()
+                ):
+                    raise ValueError(
+                        "A valid session_id is required."
+                    )
+
+                return {
+                    "success": True,
+                    "result": {
+                        "session_id": session_id,
+                    },
+                    "action": "blank_projection",
+                }
+
+            # -----------------------------------------------------
+            # Restore projection
+            # -----------------------------------------------------
+
+            elif command == "restore_projection":
+
+                session_id = parameters.get("session_id")
+
+                if (
+                    not isinstance(session_id, str)
+                    or not session_id.strip()
+                ):
+                    raise ValueError(
+                        "A valid session_id is required."
+                    )
+
+                return {
+                    "success": True,
+                    "result": {
+                        "session_id": session_id,
+                    },
+                    "action": "restore_projection",
+                }
+
 
             # -----------------------------------------------------
             # Stop

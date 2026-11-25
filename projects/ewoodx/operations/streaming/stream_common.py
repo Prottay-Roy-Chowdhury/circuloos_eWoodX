@@ -48,6 +48,8 @@ CONTROL_COMMANDS = {
     "pause",
     "resume",
     "get_status",
+    "blank_projection",
+    "restore_projection",
 }
 
 

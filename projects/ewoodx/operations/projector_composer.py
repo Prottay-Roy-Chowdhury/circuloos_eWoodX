@@ -34,9 +34,11 @@ from __future__ import annotations
 
 import math
 import sys
+import time
 from pathlib import Path
 
 import cv2
+import numpy as np
 
 
 # -------------------------------------------------------------
@@ -57,6 +59,8 @@ from projects.ewoodx.config import (
     PROJECTOR_OFFSET_X_MM,
     PROJECTOR_OFFSET_Y_MM,
     TIMBER_THICKNESS_MM,
+    PROJECTOR_WIDTH,
+    PROJECTOR_HEIGHT,
 )
 
 from projects.ewoodx.operations.projection.projector_state import (
@@ -102,6 +106,7 @@ class EWoodXProjectorComposer:
         file_poll_interval: float = 0.5,
         gh_timeout: float = 5.0,
         enable_streaming: bool = True,
+        max_blanking_duration: float = 2.0,
     ) -> None:
 
         # ---------------------------------------------------------
@@ -132,6 +137,10 @@ class EWoodXProjectorComposer:
             enable_streaming
         )
 
+        self.max_blanking_duration = float(
+            max_blanking_duration
+        )
+
         # ---------------------------------------------------------
         # Configuration validation
         # ---------------------------------------------------------
@@ -159,12 +168,40 @@ class EWoodXProjectorComposer:
                 "frame_delay_ms must be at least 1."
             )
 
+        if (
+            not math.isfinite(self.max_blanking_duration)
+            or self.max_blanking_duration <= 0.0
+        ):
+            raise ValueError(
+                "max_blanking_duration must be "
+                "finite and positive."
+            )
+
         # ---------------------------------------------------------
         # Application lifecycle
         # ---------------------------------------------------------
 
         self.running = False
         self.paused = False
+
+        # ---------------------------------------------------------
+        # Projection blanking state
+        # ---------------------------------------------------------
+
+        self.projection_blanked = False
+
+        self.blanking_session_id = None
+        self.blanking_owner = None
+        self.blanking_started_at = None
+
+        self.black_frame = np.zeros(
+            (
+                PROJECTOR_HEIGHT,
+                PROJECTOR_WIDTH,
+                3,
+            ),
+            dtype=np.uint8,
+        )
 
         # ---------------------------------------------------------
         # Projector geometry and calibration
@@ -421,8 +458,8 @@ class EWoodXProjectorComposer:
         Receive remote commands and delegate interpretation
         to ProjectorControls.
 
-        The composer executes lifecycle actions and sends
-        responses through the streaming service.
+        Execute application actions before returning
+        command acknowledgments.
         """
 
         if (
@@ -435,29 +472,20 @@ class EWoodXProjectorComposer:
 
         for _ in range(20):
 
-            message = (
-                self.stream_service.get_command()
-            )
+            message = self.stream_service.get_command()
 
             if message is None:
                 break
 
-            command = message.get(
-                "command"
-            )
+            command = message.get("command")
 
             parameters = message.get(
                 "parameters",
                 {},
             )
 
-            source = message.get(
-                "source"
-            )
-
-            request_id = message.get(
-                "request_id"
-            )
+            source = message.get("source")
+            request_id = message.get("request_id")
 
             response = self.controls.handle_command(
                 command=command,
@@ -470,26 +498,71 @@ class EWoodXProjectorComposer:
             )
 
             # -----------------------------------------------------
-            # Execute requested lifecycle action
+            # Execute requested application action
             # -----------------------------------------------------
 
             if response["success"]:
 
-                action = response.get(
-                    "action"
-                )
+                action = response.get("action")
 
-                if action == "pause":
+                try:
 
-                    self.paused = True
+                    if action == "pause":
 
-                elif action == "resume":
+                        if self.projection_blanked:
+                            raise RuntimeError(
+                                "Cannot pause during "
+                                "an active blanking session."
+                            )
 
-                    self.paused = False
+                        self.paused = True
 
-                elif action == "stop":
+                    elif action == "resume":
 
-                    self.running = False
+                        self.paused = False
+
+                    elif action == "stop":
+
+                        self.running = False
+
+                    elif action == "blank_projection":
+
+                        response["result"] = (
+                            self._blank_projection(
+                                session_id=response[
+                                    "result"
+                                ]["session_id"],
+                                source=source,
+                            )
+                        )
+
+                    elif action == "restore_projection":
+
+                        response["result"] = (
+                            self._restore_projection(
+                                session_id=response[
+                                    "result"
+                                ]["session_id"],
+                                source=source,
+                            )
+                        )
+
+                except (
+                    KeyError,
+                    TypeError,
+                    ValueError,
+                    RuntimeError,
+                    OSError,
+                    cv2.error,
+                ) as error:
+
+                    response = {
+                        "success": False,
+                        "result": {
+                            "error": str(error),
+                        },
+                        "action": None,
+                    }
 
             # -----------------------------------------------------
             # Return command result
@@ -516,6 +589,186 @@ class EWoodXProjectorComposer:
                         f"failed: {error}"
                     )
 
+            if not self.running:
+                break
+    
+    # =============================================================
+    # PROJECTION BLANKING
+    # =============================================================
+
+    def _blank_projection(
+        self,
+        session_id: str,
+        source: str,
+    ) -> dict:
+        """
+        Temporarily suppress the visual projection.
+
+        Geometry reception and internal state updates
+        remain active.
+        """
+
+        if not source:
+            raise ValueError(
+                "Blanking requires a valid source agent."
+            )
+
+        if self.paused:
+            raise RuntimeError(
+                "Cannot start blanking while projector "
+                "is paused."
+            )
+
+        if self.projection_blanked:
+
+            # Repeated request for the same session.
+            if (
+                self.blanking_session_id == session_id
+                and self.blanking_owner == source
+            ):
+                return {
+                    "session_id": session_id,
+                    "projection_blanked": True,
+                    "already_blanked": True,
+                }
+
+            raise RuntimeError(
+                "Another blanking session is active."
+            )
+
+        self.projection_blanked = True
+        self.blanking_session_id = session_id
+        self.blanking_owner = source
+        self.blanking_started_at = time.monotonic()
+
+        try:
+
+            # Submit a completely black image.
+            self.renderer.show_frame(
+                self.black_frame
+            )
+
+            # Process OpenCV GUI events before acknowledging.
+            cv2.waitKey(1)
+
+        except Exception:
+
+            self._clear_blanking_state()
+            raise
+
+        print(
+            "[Projector] Projection blanked:"
+            f" {session_id}"
+        )
+
+        return {
+            "session_id": session_id,
+            "projection_blanked": True,
+            "already_blanked": False,
+            "max_blanking_duration": (
+                self.max_blanking_duration
+            ),
+        }
+
+    def _clear_blanking_state(self) -> None:
+        """Reset temporary blanking state."""
+
+        self.projection_blanked = False
+        self.blanking_session_id = None
+        self.blanking_owner = None
+        self.blanking_started_at = None
+
+    def _restore_projection(
+        self,
+        session_id: str,
+        source: str,
+    ) -> dict:
+        """
+        Restore normal projection for the active session.
+        """
+
+        if not self.projection_blanked:
+
+            return {
+                "session_id": session_id,
+                "projection_blanked": False,
+                "already_restored": True,
+            }
+
+        if self.blanking_session_id != session_id:
+
+            raise RuntimeError(
+                "Blanking session ID does not match."
+            )
+
+        if self.blanking_owner != source:
+
+            raise RuntimeError(
+                "Blanking session owner does not match."
+            )
+
+        self._resume_projection_output()
+
+        print(
+            "[Projector] Projection restored:"
+            f" {session_id}"
+        )
+
+        return {
+            "session_id": session_id,
+            "projection_blanked": False,
+            "already_restored": False,
+        }
+
+    def _resume_projection_output(self) -> None:
+        """
+        Clear blanking and immediately display the latest
+        geometry using the existing source priority.
+        """
+
+        self._clear_blanking_state()
+
+        frame = self.renderer.render_snapshot(
+            self.state.get_snapshot()
+        )
+
+        self.renderer.show_frame(frame)
+
+        cv2.waitKey(1)
+
+    def _check_blanking_timeout(self) -> None:
+        """
+        Automatically restore projection if the sensing
+        agent fails to release the blanking session.
+        """
+
+        if not self.projection_blanked:
+            return
+
+        if self.blanking_started_at is None:
+            return
+
+        elapsed = (
+            time.monotonic()
+            - self.blanking_started_at
+        )
+
+        if elapsed < self.max_blanking_duration:
+            return
+
+        session_id = self.blanking_session_id
+
+        print(
+            "[Projector] Blanking timeout:"
+            f" {session_id}"
+        )
+
+        self._resume_projection_output()
+
+        print(
+            "[Projector] Projection automatically restored."
+        )
+
     # =============================================================
     # APPLICATION STATUS
     # =============================================================
@@ -539,6 +792,18 @@ class EWoodXProjectorComposer:
             "stream_started": self.stream_started,
             "stream_enabled": self.enable_streaming,
             "paused": self.paused,
+            "projection_blanked": (
+                self.projection_blanked
+            ),
+            "blanking_session_id": (
+                self.blanking_session_id
+            ),
+            "blanking_owner": (
+                self.blanking_owner
+            ),
+            "max_blanking_duration": (
+                self.max_blanking_duration
+            ),
             "fullscreen": self.fullscreen,
             "homography_file": str(
                 self.homography_file
@@ -655,6 +920,8 @@ class EWoodXProjectorComposer:
 
                 self._check_gh_timeout()
 
+                self._check_blanking_timeout()
+
                 # -------------------------------------------------
                 # Remote commands
                 # -------------------------------------------------
@@ -667,8 +934,14 @@ class EWoodXProjectorComposer:
                 # -------------------------------------------------
                 # Render current state
                 # -------------------------------------------------
+                
+                if self.projection_blanked:
 
-                if not self.paused:
+                    self.renderer.show_frame(
+                        self.black_frame
+                    )
+
+                elif not self.paused:
 
                     frame = (
                         self.renderer.render_snapshot(
