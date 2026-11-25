@@ -66,6 +66,7 @@ from projects.ewoodx.operations.sensing_composer import (
 ENABLE_HANDDRAW = False
 ENABLE_STREAMING = True
 ENABLE_PREVIEW = True
+ENABLE_SYNCHRONIZATION = False
 
 
 class EWoodXSensingEntrypointStream:
@@ -88,6 +89,7 @@ class EWoodXSensingEntrypointStream:
         enable_streaming: bool = ENABLE_STREAMING,
         enable_preview: bool = ENABLE_PREVIEW,
         intrinsic_file: Path | None = None,
+        enable_synchronization: bool = ENABLE_SYNCHRONIZATION,
     ) -> None:
 
         if (
@@ -132,6 +134,16 @@ class EWoodXSensingEntrypointStream:
         self.enable_handdraw = bool(enable_handdraw)
         self.enable_streaming = bool(enable_streaming)
         self.enable_preview = bool(enable_preview)
+
+        self.enable_synchronization = bool(
+            enable_synchronization
+        )
+
+        if self.enable_synchronization and not self.enable_streaming:
+
+            raise ValueError(
+                "Sensing synchronization requires streaming."
+            )
 
         self.intrinsic_file = (
             Path(intrinsic_file)
@@ -750,6 +762,11 @@ class EWoodXSensingEntrypointStream:
             f"{self.enable_preview}"
         )
 
+        print(
+            f"  Capture synchronization: "
+            f"{self.enable_synchronization}"
+        )
+
         # ---------------------------------------------------------
         # Unified sensing composer (NEW)
         # ---------------------------------------------------------
@@ -762,6 +779,10 @@ class EWoodXSensingEntrypointStream:
             enable_handdraw=self.enable_handdraw,
             enable_streaming=self.enable_streaming,
             enable_preview=self.enable_preview,
+
+            enable_synchronization=(
+                self.enable_synchronization
+            ),
 
             # Optional CIRCULOOS publication will be
             # connected here later, after local testing.

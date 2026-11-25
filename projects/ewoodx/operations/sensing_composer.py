@@ -28,9 +28,11 @@ import json
 import math
 import queue
 import threading
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
+from collections import deque
 
 import cv2
 import numpy as np
@@ -85,6 +87,11 @@ from projects.ewoodx.operations.streaming.sensing_stream_service import (
     SensingStreamService,
 )
 
+from projects.ewoodx.operations.synchronization.capture_sync_service import (
+    CaptureSyncService,
+    CaptureSyncError,
+)
+
 
 class EWoodXSensingComposer:
     """Coordinate one continuous timber sensing operation."""
@@ -99,6 +106,7 @@ class EWoodXSensingComposer:
         enable_streaming: bool = True,
         enable_preview: bool = True,
         on_entity_finalized: Callable | None = None,
+        enable_synchronization: bool = cfg.ENABLE_SYNCHRONIZATION,
     ) -> None:
 
         self.entity_manager = entity_manager
@@ -120,6 +128,16 @@ class EWoodXSensingComposer:
 
         self.enable_preview = bool(enable_preview)
         self.on_entity_finalized = on_entity_finalized
+
+        self.enable_synchronization = bool(
+            enable_synchronization
+        )
+
+        if self.enable_synchronization and not enable_streaming:
+
+            raise ValueError(
+                "Sensing synchronization requires streaming."
+            )
 
         self.runtime_root = Path(
             cfg.PROJECTOR_RUNTIME_ROOT
@@ -177,6 +195,30 @@ class EWoodXSensingComposer:
         self.paused = False
         self.frame_sequence = 0
         self.capture_state = "READY"
+
+        # ---------------------------------------------------------
+        # Capture synchronization
+        # ---------------------------------------------------------
+
+        self.capture_sync_service = (
+            CaptureSyncService(
+                camera=self.camera,
+                stream_service=self.stream_service,
+                should_cancel=self._should_cancel_capture,
+            )
+            if self.enable_synchronization
+            else None
+        )
+
+        # ---------------------------------------------------------
+        # Sensing performance diagnostics
+        # ---------------------------------------------------------
+
+        self.cycle_durations = deque(maxlen=10)
+
+        self.effective_sensing_fps = 0.0
+
+        self.last_cycle_timing = {}
 
     # =========================================================
     # EQUIPMENT INITIALIZATION
@@ -1589,22 +1631,58 @@ class EWoodXSensingComposer:
 
         return {
             "running": self.running,
+
             "paused": self.paused,
+
             "equipment": self.equipment,
+
             "segmentation_mode": self.segmentation_mode,
+
             "capture_state": self.capture_state,
+
             "active_entity_id": self.active_entity_id,
+
             "last_finalized_entity_id": (
                 self.last_finalized_entity_id
             ),
+
             "has_valid_measurement": (
                 self.latest_valid_result is not None
             ),
+
             "manual_thickness_mm": (
                 self.manual_thickness_mm
             ),
+
             "frame_sequence": self.frame_sequence,
+
             "last_error": self.last_error,
+
+            # -------------------------------------------------
+            # Synchronization
+            # -------------------------------------------------
+
+            "synchronization_enabled": (
+                self.enable_synchronization
+            ),
+
+            "synchronization": (
+                self.capture_sync_service.get_status()
+                if self.capture_sync_service is not None
+                else None
+            ),
+
+            # -------------------------------------------------
+            # Performance
+            # -------------------------------------------------
+
+            "effective_sensing_fps": (
+                self.effective_sensing_fps
+            ),
+
+            "cycle_timing": dict(
+                self.last_cycle_timing
+            ),
         }
 
     def _execute_command(self, command, parameters=None):
@@ -1788,6 +1866,127 @@ class EWoodXSensingComposer:
                 )
 
     # =========================================================
+    # FRAME ACQUISITION
+    # =========================================================
+
+    def _should_cancel_capture(self):
+
+        return (
+            not self.running
+            or self.paused
+            or self.stop_input_thread.is_set()
+        )
+
+
+    def _capture_frame(self):
+
+        """
+        Capture one frame using the configured acquisition mode.
+
+        Synchronization disabled:
+            Direct camera acquisition.
+
+        Synchronization enabled:
+            Acquire a frame during temporary projector blanking.
+        """
+
+        if self.capture_sync_service is not None:
+
+            return self.capture_sync_service.capture()
+
+        return self.camera.capture()
+
+    # =========================================================
+    # SENSING PERFORMANCE
+    # =========================================================
+
+    def _update_cycle_timing(
+        self,
+        cycle_started_at,
+        capture_duration,
+        processing_duration,
+    ):
+
+        cycle_duration = (
+            time.perf_counter()
+            - cycle_started_at
+        )
+
+        if cycle_duration <= 0:
+            return
+
+        self.cycle_durations.append(
+            cycle_duration
+        )
+
+        # Effective throughput over the latest
+        # ten completed sensing cycles.
+        self.effective_sensing_fps = (
+            len(self.cycle_durations)
+            / sum(self.cycle_durations)
+        )
+
+        timing = {
+            "cycle_duration_ms": (
+                cycle_duration * 1000.0
+            ),
+
+            "capture_duration_ms": (
+                capture_duration * 1000.0
+            ),
+
+            "processing_duration_ms": (
+                processing_duration * 1000.0
+            ),
+
+            "sync_duration_ms": 0.0,
+
+            "sync_without_wait_ms": 0.0,
+
+            "projection_wait_ms": 0.0,
+        }
+
+        if self.capture_sync_service is not None:
+
+            sync_timing = (
+                self.capture_sync_service.last_timing
+            )
+
+            sync_duration = sync_timing.get(
+                "sync_duration_ms",
+                0.0,
+            )
+
+            projection_wait = sync_timing.get(
+                "projection_wait_ms",
+                0.0,
+            )
+
+            timing["sync_duration_ms"] = (
+                sync_duration
+            )
+
+            timing["projection_wait_ms"] = (
+                projection_wait
+            )
+
+            timing["sync_without_wait_ms"] = max(
+                0.0,
+                sync_duration - projection_wait,
+            )
+
+        self.last_cycle_timing = timing
+
+
+    def _reset_cycle_timing(self):
+
+        self.cycle_durations.clear()
+
+        self.effective_sensing_fps = 0.0
+
+        self.last_cycle_timing = {}
+
+    # =========================================================
     # MAIN LOOP
     # =========================================================
 
@@ -1840,7 +2039,56 @@ class EWoodXSensingComposer:
                 self.segmentation_mode,
             )
 
+            print(
+                "[eWoodX] Capture synchronization:",
+                "enabled"
+                if self.enable_synchronization
+                else "disabled",
+            )
+
+            if self.capture_sync_service is not None:
+
+                sync_status = (
+                    self.capture_sync_service.get_status()
+                )
+
+                print(
+                    "[eWoodX] Sync projector:",
+                    sync_status["projector_id"],
+                )
+
+                print(
+                    "[eWoodX] Sync settling time:",
+                    sync_status["settling_time_ms"],
+                    "ms",
+                )
+
+                print(
+                    "[eWoodX] Sync discard frames:",
+                    sync_status["discard_frames"],
+                )
+
+                print(
+                    "[eWoodX] Minimum projection visibility:",
+                    sync_status["min_projection_time_ms"],
+                    "ms",
+                )
+
+                print(
+                    "[eWoodX] Sync command timeout:",
+                    sync_status["command_timeout_ms"],
+                    "ms",
+                )
+
+            self._reset_cycle_timing()
+
             while self.running:
+
+                cycle_started_at = time.perf_counter()
+
+                # -----------------------------------------------------
+                # Process local and remote commands
+                # -----------------------------------------------------
 
                 self._process_commands()
 
@@ -1849,15 +2097,57 @@ class EWoodXSensingComposer:
 
                 if self.paused:
 
+                    self._reset_cycle_timing()
+
                     self.stop_input_thread.wait(0.03)
+
                     continue
 
-                frame = self.camera.capture()
+                # -----------------------------------------------------
+                # Frame acquisition
+                # -----------------------------------------------------
+
+                capture_started_at = time.perf_counter()
+
+                try:
+
+                    frame = self._capture_frame()
+
+                except CaptureSyncError as exc:
+
+                    self.last_error = str(exc)
+
+                    self._reset_cycle_timing()
+
+                    print(
+                        "[eWoodX] Capture synchronization error:",
+                        exc,
+                    )
+
+                    # Prevent rapid retries when the projector
+                    # or stream connection is unavailable.
+                    self.stop_input_thread.wait(0.1)
+
+                    continue
+
+                capture_duration = (
+                    time.perf_counter()
+                    - capture_started_at
+                )
 
                 if frame is None:
+
+                    self._reset_cycle_timing()
+
                     continue
 
                 self.frame_sequence += 1
+
+                # -----------------------------------------------------
+                # Frame processing
+                # -----------------------------------------------------
+
+                processing_started_at = time.perf_counter()
 
                 try:
 
@@ -1874,6 +2164,10 @@ class EWoodXSensingComposer:
                                 result
                             )
 
+                    # -------------------------------------------------
+                    # Preview
+                    # -------------------------------------------------
+
                     if self.enable_preview:
 
                         cv2.imshow(
@@ -1883,9 +2177,26 @@ class EWoodXSensingComposer:
 
                         cv2.waitKey(1)
 
+                    # -------------------------------------------------
+                    # Performance diagnostics
+                    # -------------------------------------------------
+
+                    processing_duration = (
+                        time.perf_counter()
+                        - processing_started_at
+                    )
+
+                    self._update_cycle_timing(
+                        cycle_started_at=cycle_started_at,
+                        capture_duration=capture_duration,
+                        processing_duration=processing_duration,
+                    )
+
                 except Exception as exc:
 
                     self.last_error = str(exc)
+
+                    self._reset_cycle_timing()
 
                     print(
                         "[eWoodX] Frame processing error:",
