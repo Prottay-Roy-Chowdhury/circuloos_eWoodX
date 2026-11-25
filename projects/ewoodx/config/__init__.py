@@ -132,6 +132,14 @@ from projects.ewoodx.config.projection import (
     PROJECTOR_RUNTIME_ROOT,
 )
 
+from projects.ewoodx.config.synchronization import (
+    ENABLE_SYNCHRONIZATION,
+    SYNC_SETTLING_TIME_MS,
+    SYNC_DISCARD_FRAMES,
+    SYNC_MIN_PROJECTION_TIME_MS,
+    SYNC_COMMAND_TIMEOUT_MS,
+)
+
 
 __all__ = [
     "EWOODX_PROJECT_ROOT",
@@ -256,4 +264,10 @@ __all__ = [
     "PROJECTOR_CALIBRATION_MODE",
 
     "PROJECTOR_RUNTIME_ROOT",
+
+    "ENABLE_SYNCHRONIZATION",
+    "SYNC_SETTLING_TIME_MS",
+    "SYNC_DISCARD_FRAMES",
+    "SYNC_MIN_PROJECTION_TIME_MS",
+    "SYNC_COMMAND_TIMEOUT_MS",
 ]
