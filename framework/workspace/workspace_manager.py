@@ -55,6 +55,39 @@ def _workspaces_dir(
         / WORKSPACES_DIR
     ).resolve()
 
+def list_workspaces(
+    project_root: str | Path,
+) -> list[str]:
+    """
+    List existing managed workspace names.
+
+    Workspaces are discovered dynamically from the
+    workspace directory by checking for the presence
+    of their workspace manifest.
+
+    This function does not create, load, modify,
+    or delete any workspace.
+    """
+
+    project_root = Path(project_root).resolve()
+
+    workspaces_dir = _workspaces_dir(
+        project_root
+    )
+
+    if not workspaces_dir.is_dir():
+        return []
+
+    return sorted(
+        path.name
+        for path in workspaces_dir.iterdir()
+        if (
+            path.name != LATEST_POINTER
+            and path.is_dir()
+            and (path / MANIFEST_FILE).is_file()
+        )
+    )
+
 
 def _safe_latest_pointer(
     parent: Path,

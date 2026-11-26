@@ -8,6 +8,7 @@ from framework.workspace.workspace_manager import (
     WorkspacePaths,
     init_workspace,
     load_workspace,
+    list_workspaces,
 )
 
 from framework.workspace.domain_manager import (
@@ -37,4 +38,5 @@ __all__ = [
     "EntryPaths",
     "EntityManager",
     "EntityPaths",
+    "list_workspaces",
 ]
