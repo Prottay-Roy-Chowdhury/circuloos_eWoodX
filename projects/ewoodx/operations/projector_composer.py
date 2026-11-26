@@ -35,6 +35,8 @@ from __future__ import annotations
 import math
 import sys
 import time
+import threading
+
 from pathlib import Path
 
 import cv2
@@ -882,12 +884,19 @@ class EWoodXProjectorComposer:
     # MAIN APPLICATION LOOP
     # =============================================================
 
-    def run(self) -> None:
+
+    def run(
+        self,
+        shutdown_event: threading.Event | None = None,
+    ) -> None:
         """
         Run the projector application.
 
         Data and commands continue to be processed
         even when rendering is paused.
+
+        An optional shutdown event allows an external
+        application to request graceful termination.
         """
 
         self._print_startup_info()
@@ -896,7 +905,33 @@ class EWoodXProjectorComposer:
 
         try:
 
+            # -------------------------------------------------
+            # Check for early application shutdown
+            # -------------------------------------------------
+
+            if (
+                shutdown_event is not None
+                and shutdown_event.is_set()
+            ):
+
+                return
+
+            # -------------------------------------------------
+            # Existing streaming initialization
+            # -------------------------------------------------
+
             self._start_stream()
+
+            if (
+                shutdown_event is not None
+                and shutdown_event.is_set()
+            ):
+
+                return
+
+            # -------------------------------------------------
+            # Existing projector window
+            # -------------------------------------------------
 
             self.renderer.create_window()
 
@@ -908,11 +943,34 @@ class EWoodXProjectorComposer:
                     cv2.WINDOW_NORMAL,
                 )
 
+            # Application readiness notification.
+
+            print(
+                "[Projector] Composer started successfully."
+            )
+
+            # -------------------------------------------------
+            # Main application loop
+            # -------------------------------------------------
+
             while self.running:
 
-                # -------------------------------------------------
+                # ---------------------------------------------
+                # Application shutdown request
+                # ---------------------------------------------
+
+                if (
+                    shutdown_event is not None
+                    and shutdown_event.is_set()
+                ):
+
+                    self.running = False
+
+                    break
+
+                # ---------------------------------------------
                 # Update projection sources
-                # -------------------------------------------------
+                # ---------------------------------------------
 
                 self._poll_stream()
 
@@ -922,19 +980,20 @@ class EWoodXProjectorComposer:
 
                 self._check_blanking_timeout()
 
-                # -------------------------------------------------
+                # ---------------------------------------------
                 # Remote commands
-                # -------------------------------------------------
+                # ---------------------------------------------
 
                 self._process_commands()
 
                 if not self.running:
+
                     break
 
-                # -------------------------------------------------
+                # ---------------------------------------------
                 # Render current state
-                # -------------------------------------------------
-                
+                # ---------------------------------------------
+
                 if self.projection_blanked:
 
                     self.renderer.show_frame(
@@ -953,9 +1012,9 @@ class EWoodXProjectorComposer:
                         frame
                     )
 
-                # -------------------------------------------------
+                # ---------------------------------------------
                 # Keyboard input
-                # -------------------------------------------------
+                # ---------------------------------------------
 
                 key = self.renderer.poll_key(
                     self.frame_delay_ms
