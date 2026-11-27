@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>eWoodX</title>
+  <link rel="stylesheet" href="/static/styles.css?v=11" />
+</head>
+<body>
+  <!-- TOP SWISS HAIRLINE BAR -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <span class="brand-name">eWoodX</span>
+      <span class="metric-chip">
+        <span class="dot" id="streamDot"></span>
+        <span id="topBoardDims">1200 × 800 mm</span>
+      </span>
+      <span class="progress-pill" id="progressPill" title="Progress">
+        <span class="progress-track"><span class="progress-fill" id="progressFill"></span></span>
+        <span id="progressPctLabel">0%</span>
+      </span>
+    </div>
+
+    <nav class="nav-tabs" aria-label="View">
+      <button class="nav-tab active" data-view="split" data-i18n="view_split">Dividida</button>
+      <button class="nav-tab" data-view="overview" data-i18n="view_table">Mesa</button>
+      <button class="nav-tab" data-view="projector" data-i18n="view_projector">Proyector</button>
+      <button class="nav-tab" data-view="parts" id="tabPartsView">
+        <span data-i18n="view_parts">Piezas</span>
+        <span class="tab-count" id="partsTabCount">0</span>
+      </button>
+      <button class="nav-tab hidden" id="tabOpencvView" data-view="opencv">OpenCV</button>
+    </nav>
+
+    <div class="topbar-right">
+      <!-- Trilingual Switcher: EN · ES · NL -->
+      <div class="pill-switch" id="langSwitch" title="Language">
+        <button data-lang="en">EN</button>
+        <button class="active" data-lang="es">ES</button>
+        <button data-lang="nl">NL</button>
+      </div>
+
+      <!-- Quiet Settings Drawer Icon -->
+      <button class="btn-ghost btn-sm" id="btnOpenDrawer" aria-label="Settings">
+        <svg class="ico" width="15" height="15" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- OPTION C WORKSHOP KIOSK SHELL -->
+  <main class="kiosk-shell">
+    <!-- TOP: EXPANSIVE 50/50 DRAFTING & PROJECTION STAGE -->
+    <section class="stage-wrap">
+      <div class="stage-views split" id="stageViews">
+        <!-- Left: Master Drawing + Hatched Eliminated Boards + Active Scanned Board -->
+        <div class="pane" id="overviewPane">
+          <div class="pane-caption" id="overviewCaption">MESA · 1200 × 800 mm</div>
+
+          <!-- 4 Universal Language-Free Canvas Icons (Lock · Auto-Nest · Rotate 90° · Undo) -->
+          <div class="canvas-tools">
+            <button id="btnToggleLock" title="Lock">
+              <svg class="ico" id="lockIconUnlocked" width="15" height="15" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10"/><path d="M8 11V7a4 4 0 0 1 7.6-1.7"/></svg>
+              <svg class="ico hidden" id="lockIconLocked" width="15" height="15" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+            </button>
+            <button id="btnAutoNest" title="Auto-fit uncovered">
+              <svg class="ico" width="15" height="15" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>
+            </button>
+            <button id="btnRotPlus90" title="Rotate 90°">
+              <svg class="ico" width="15" height="15" viewBox="0 0 24 24"><path d="M20 11A8 8 0 1 0 18 17"/><polyline points="20 5 20 11 14 11"/></svg>
+            </button>
+            <button id="btnUndoRegion" title="Undo last board">
+              <svg class="ico" width="15" height="15" viewBox="0 0 24 24"><path d="M4 11A8 8 0 1 1 6 17"/><polyline points="4 5 4 11 10 11"/></svg>
+            </button>
+          </div>
+
+          <canvas id="overviewCanvas"></canvas>
+
+          <div class="canvas-zoom">
+            <button id="btnZoomOut" aria-label="Zoom out">−</button>
+            <button id="btnZoomFit" aria-label="Fit">100%</button>
+            <button id="btnZoomIn" aria-label="Zoom in">+</button>
+          </div>
+        </div>
+
+        <!-- Right: Exact Active Board Projection Preview -->
+        <div class="pane dark" id="previewPane">
+          <div class="pane-caption" id="previewCaption">PROYECTOR · #1</div>
+          <canvas id="previewCanvas"></canvas>
+        </div>
+
+        <!-- Sandbox OpenCV Real eWoodX ProjectorRenderer Frame -->
+        <div class="pane dark hidden" id="opencvPane">
+          <div class="pane-caption">eWoodX OpenCV · 1280 × 800</div>
+          <img id="opencvFrameImg" class="opencv-img" alt="eWoodX OpenCV output" />
+        </div>
+
+        <!-- Assembly / Material Cut List Tab (Polyline Squared Bounding Boxes) -->
+        <div class="parts-view hidden" id="partsPane">
+          <!-- Left: Assembly Map with Numbered Polylines & Squared Bounding Boxes -->
+          <div class="parts-map-pane">
+            <div class="pane-caption" id="partsMapCaption">ENSAMBLAJE · BBOX</div>
+            <div class="parts-box-switch pill-switch" id="partsBoxSwitch" title="Bounding Box Mode">
+              <button class="active" data-box="obb">OBB</button>
+              <button data-box="aabb">AABB</button>
+            </div>
+            <canvas id="partsCanvas"></canvas>
+          </div>
+
+          <!-- Right: Material Cut List / Grouped Stock Summary & Interactive Table -->
+          <div class="parts-list-pane">
+            <div class="parts-header">
+              <div class="parts-kpis">
+                <div class="kpi-item">
+                  <span class="kpi-label" data-i18n="parts_total_bbox">Envolvente</span>
+                  <span class="kpi-val" id="partsMasterBbox">—</span>
+                </div>
+                <div class="kpi-item">
+                  <span class="kpi-label" data-i18n="parts_count">Piezas</span>
+                  <span class="kpi-val" id="partsTotalCount">0</span>
+                </div>
+                <div class="kpi-item">
+                  <span class="kpi-label" data-i18n="parts_ready">Listas</span>
+                  <span class="kpi-val" id="partsReadyCount">0 / 0</span>
+                </div>
+              </div>
+              <div class="parts-actions">
+                <button class="btn-ghost btn-sm" id="btnResetParts" title="Reset checklist">
+                  <svg class="ico" width="14" height="14" viewBox="0 0 24 24"><path d="M4 11A8 8 0 1 1 6 17"/><polyline points="4 5 4 11 10 11"/></svg>
+                </button>
+                <button class="btn-primary btn-sm" id="btnExportPartsCsv">CSV</button>
+              </div>
+            </div>
+
+            <!-- Grouped Stock Chips (e.g. 4x 720x80 mm · 2x 1600x90 mm) -->
+            <div class="parts-groups" id="partsGroupChips"></div>
+
+            <!-- Polyline Bounding Box Table -->
+            <div class="parts-table-wrap">
+              <table class="parts-table">
+                <thead>
+                  <tr>
+                    <th class="col-chk"></th>
+                    <th class="col-id">ID</th>
+                    <th data-i18n="col_bbox">Caja cuadrada (mm)</th>
+                    <th data-i18n="col_angle">Ángulo / AABB</th>
+                    <th data-i18n="col_layer">Capa</th>
+                  </tr>
+                </thead>
+                <tbody id="partsTableBody"></tbody>
+              </table>
+              <div class="parts-empty hidden" id="partsEmptyState" data-i18n="parts_empty">
+                Sube un DXF o dibujo vectorial para listar el bounding box de cada polilínea.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer class="stage-footer">
+        <span class="mono" id="cursorCoords">X 0.0 · Y 0.0 mm</span>
+        <span id="stageHint" data-i18n="hint">Arrastra el dibujo · Siguiente marca la tabla como hecha</span>
+      </footer>
+    </section>
+
+    <!-- BOTTOM: TACTILE SWISS KIOSK CONSOLE (ONLY 4 CORE ACTIONS) -->
+    <section class="kiosk-console">
+      <!-- 1. SCAN (Next board) + RE-SCAN (Same bumped/moved board -> rigid re-anchor & re-project) -->
+      <div class="cmd-col">
+        <div class="cmd-pair">
+          <button class="btn-secondary cmd-btn" id="btnScan">
+            <svg class="ico ico-lg" width="22" height="22" viewBox="0 0 24 24">
+              <path d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/>
+              <rect x="8" y="8" width="8" height="8"/>
+            </svg>
+            <span data-i18n="scan">Escanear</span>
+          </button>
+          <button class="btn-secondary cmd-icon-btn" id="btnRescan" aria-label="Re-scan moved piece" title="Re-escanear pieza movida (R)">
+            <svg class="ico" width="20" height="20" viewBox="0 0 24 24">
+              <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+              <polyline points="21 3 21 9 15 9"/>
+              <rect x="9" y="9" width="6" height="6"/>
+            </svg>
+          </button>
+        </div>
+        <div class="cmd-meta">
+          <span class="val" id="boardDimsLabel">1200 × 800 mm</span>
+          <span id="boardAngleLabel">0.0° · 22 mm</span>
+        </div>
+      </div>
+
+      <!-- 2. UPLOAD DRAWING (DXF 1:1 · PDF · Image) -->
+      <div class="cmd-col">
+        <button class="btn-secondary cmd-btn" id="btnUploadDrawing">
+          <svg class="ico ico-lg" width="22" height="22" viewBox="0 0 24 24">
+            <path d="M12 16V4"/>
+            <path d="M7 9l5-5 5 5"/>
+            <path d="M4 20h16"/>
+          </svg>
+          <span data-i18n="upload">Subir</span>
+        </button>
+        <input type="file" id="designFileInput" accept=".dxf,.pdf,.png,.jpg,.jpeg,.bmp,.webp,.tif,.tiff" class="hidden" />
+        <div class="cmd-meta">
+          <span class="val" id="designNameLabel">—</span>
+          <div class="sample-links">
+            <button class="mini-link" id="btnSampleDxf" title="Demo DXF 1:1">DXF</button>
+            <button class="mini-link" id="btnSampleAsm" title="Demo Assembly DXF 1:1">ASM</button>
+            <button class="mini-link" id="btnSamplePdf" title="Demo PDF">PDF</button>
+            <button class="mini-link" id="btnSampleImg" title="Demo Image">IMG</button>
+            <span class="scale-badge" id="designScaleBadge">1:1</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. BACK / PROGRESS / NEXT (Commits stamped region & advances to uncovered area) -->
+      <div class="cmd-col">
+        <div class="stepper">
+          <button class="btn-secondary cmd-btn" id="btnPrevTile">
+            <svg class="ico" width="18" height="18" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>
+            <span data-i18n="back">Atrás</span>
+          </button>
+          <div class="stepper-center" id="stepperCenter">
+            <span class="stepper-num" id="tileCounter">#1</span>
+            <span class="stepper-pct" id="stepperPct">0%</span>
+          </div>
+          <button class="btn-secondary cmd-btn" id="btnNextTile">
+            <span data-i18n="next">Siguiente</span>
+            <svg class="ico" width="18" height="18" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+          </button>
+        </div>
+        <div class="cmd-meta">
+          <span id="progressiveMetaLabel">0 hechas</span>
+          <span id="fiducialsMetaLabel">M1-A · M1-B</span>
+        </div>
+      </div>
+
+      <!-- 4. SEND DRAWING + BLACKOUT -->
+      <div class="cmd-send-col">
+        <button class="btn-primary cmd-btn btn-send" id="btnSendDrawing">
+          <svg class="ico ico-lg" width="22" height="22" viewBox="0 0 24 24">
+            <polygon points="5,4 20,12 5,20"/>
+          </svg>
+          <span data-i18n="send">Enviar</span>
+        </button>
+        <button class="btn-danger-ghost" id="btnBlankProjector" aria-label="Blackout" title="Blackout (B)">
+          <svg class="ico" width="20" height="20" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="9"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <!-- GLOBAL DRAG-AND-DROP OVERLAY -->
+  <div class="drop-veil hidden" id="dropVeil">
+    <svg class="ico" width="36" height="36" style="width:36px;height:36px;" viewBox="0 0 24 24"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 20h16"/></svg>
+    <div class="drop-veil-title" data-i18n="drop_here">Suelta DXF · PDF · Imagen · JSON</div>
+  </div>
+
+  <!-- SLIDE-OVER DRAWER: ADVANCED SETTINGS -->
+  <div class="drawer-backdrop hidden" id="settingsDrawer">
+    <div class="drawer">
+      <div class="drawer-head">
+        <span class="drawer-title" data-i18n="settings">Ajustes</span>
+        <button class="btn-ghost btn-sm" id="btnCloseDrawer" data-i18n="close">Cerrar</button>
+      </div>
+      <div class="drawer-body">
+
+        <!-- Progressive / Nesting Controls -->
+        <div class="drawer-sec">
+          <span class="label-caps" data-i18n="sec_mode">Modo de proyección</span>
+          <select id="modeSelect">
+            <option value="progressive" data-i18n="mode_progressive">Nesting progresivo (tablas distintas)</option>
+            <option value="mosaic" data-i18n="mode_mosaic">Mosaico uniforme (cuadrícula fija)</option>
+            <option value="single" data-i18n="mode_single">Encaje único (sin recorte)</option>
+          </select>
+          <div class="field-grid">
+            <div class="field"><label data-i18n="overlap">Solape (mm)</label><input type="number" id="overlapInput" value="50" min="0" max="400" step="5" /></div>
+            <div class="field"><label data-i18n="margin">Margen (mm)</label><input type="number" id="marginInput" value="0" min="0" max="200" step="5" /></div>
+          </div>
+          <label class="check-line"><span data-i18n="reg_marks">Marcas de registro</span><input type="checkbox" id="chkRegMarks" checked /></label>
+          <div class="row">
+            <button class="btn-ghost btn-sm" id="btnResetRegions" data-i18n="reset_progress">Reiniciar progreso</button>
+            <button class="btn-ghost btn-sm" id="btnCenterBoard" data-i18n="center">Centrar</button>
+          </div>
+        </div>
+
+        <!-- Board / JSON Input -->
+        <div class="drawer-sec">
+          <span class="label-caps" data-i18n="sec_board">Tabla (JSON)</span>
+          <div class="row">
+            <select id="boardScenarioSelect">
+              <option value="board_1200x800">1200 × 800 mm (0°)</option>
+              <option value="board_1100x800_angled">1100 × 800 mm (5.5°)</option>
+              <option value="board_1600x560_plank">1600 × 560 mm (tablón)</option>
+              <option value="board_920x660_scrap">920 × 660 mm (-3.5°)</option>
+              <option value="multi_timber_pair">Multi-timber (2×)</option>
+            </select>
+            <button class="btn-ghost btn-sm" id="btnUploadBoardJson" style="flex:0 0 auto;">JSON</button>
+            <input type="file" id="boardJsonInput" accept=".json" class="hidden" />
+          </div>
+          <div class="field-grid">
+            <div class="field"><label data-i18n="length_mm">Largo (mm)</label><input type="number" id="customBoardW" value="1200" step="10" /></div>
+            <div class="field"><label data-i18n="width_mm">Ancho (mm)</label><input type="number" id="customBoardH" value="800" step="10" /></div>
+            <div class="field"><label data-i18n="thickness_mm">Grosor (mm)</label><input type="number" id="customBoardT" value="22" step="1" /></div>
+            <div class="field"><label data-i18n="angle_deg">Ángulo (°)</label><input type="number" id="customBoardA" value="0" step="0.5" /></div>
+          </div>
+          <div class="row">
+            <button class="btn-primary btn-sm" id="btnApplyCustomBoard" data-i18n="apply">Aplicar</button>
+            <button class="btn-ghost btn-sm" id="btnRescanJsonUpload" data-i18n="rescan_json">Re-escanear JSON</button>
+            <input type="file" id="rescanJsonInput" accept=".json" class="hidden" />
+            <button class="btn-ghost btn-sm" id="btnSbNudgeRight">+40 mm</button>
+            <button class="btn-ghost btn-sm" id="btnSbAutoFeed">Auto 3s</button>
+          </div>
+        </div>
+
+        <!-- Drawing / DXF Units / PDF / Raster -->
+        <div class="drawer-sec">
+          <span class="label-caps" data-i18n="sec_drawing">Dibujo</span>
+          <div class="row">
+            <button class="btn-ghost btn-sm" id="btnAlignAngle" data-i18n="align_board">Alinear tabla</button>
+            <button class="btn-ghost btn-sm" id="btnFlipX">Flip H</button>
+            <button class="btn-ghost btn-sm" id="btnClearDesign" data-i18n="clear">Quitar</button>
+          </div>
+          <div id="dxfUnitBox" class="field hidden">
+            <label data-i18n="cad_unit">Unidad origen DXF (1:1 fija)</label>
+            <select id="dxfUnitSelect">
+              <option value="mm">mm</option>
+              <option value="cm">cm</option>
+              <option value="m">m</option>
+              <option value="in">in</option>
+            </select>
+          </div>
+          <div id="pdfPageRow" class="field hidden">
+            <label>PDF page</label>
+            <select id="pdfPageSelect"></select>
+          </div>
+          <div id="rasterDisplayControls" class="hidden" style="display:flex;flex-direction:column;gap:8px;">
+            <select id="rasterModeSelect">
+              <option value="invert_high_contrast">White on black</option>
+              <option value="binary_white">Binary threshold</option>
+              <option value="original">Original</option>
+            </select>
+            <button class="btn-ghost btn-sm btn-block" id="btnVectorizeRaster" data-i18n="vectorize">Vectorizar contornos</button>
+          </div>
+          <div id="layersSection" class="hidden">
+            <div class="layer-list" id="layerList"></div>
+          </div>
+        </div>
+
+        <!-- Projector & eWoodX Stream -->
+        <div class="drawer-sec">
+          <span class="label-caps" data-i18n="sec_projector">Proyector y eWoodX Stream</span>
+          <button class="btn-secondary btn-sm btn-block" id="btnOpenProjectorWindow" data-i18n="open_projector">Abrir ventana proyector</button>
+          <label class="check-line"><span data-i18n="show_board">Contorno de tabla</span><input type="checkbox" id="chkShowBoard" checked /></label>
+          <div class="row">
+            <button class="btn-ghost btn-sm" id="btnProjMirrorX">Mirror H</button>
+            <button class="btn-ghost btn-sm" id="btnProjMirrorY">Mirror V</button>
+          </div>
+          <div class="field-grid">
+            <div class="field"><label>Offset X (mm)</label><input type="number" id="fineOffX" value="0" step="0.5" /></div>
+            <div class="field"><label>Offset Y (mm)</label><input type="number" id="fineOffY" value="0" step="0.5" /></div>
+          </div>
+          <div class="field-grid">
+            <div class="field"><label>Host</label><input type="text" id="streamHostInput" value="127.0.0.1" /></div>
+            <div class="field"><label>Port</label><input type="number" id="streamPortInput" value="6203" /></div>
+          </div>
+          <div class="row">
+            <button class="btn-primary btn-sm" id="btnConnectStream" data-i18n="connect">Conectar</button>
+            <button class="btn-ghost btn-sm" id="btnDisconnectStream" disabled data-i18n="disconnect">Desconectar</button>
+          </div>
+          <button class="btn-ghost btn-sm btn-block" id="btnExportProjectorJson" data-i18n="export_json">Descargar JSON eWoodX</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: SCALE PROMPT (PDF: 1:1 OR SCALE · IMAGE: PHYSICAL WIDTH/HEIGHT MM) -->
+  <div class="modal-backdrop hidden" id="scaleModal">
+    <div class="modal">
+      <div class="modal-title" id="scaleModalTitle" data-i18n="scale_title">Escala del dibujo</div>
+      <div class="modal-desc" id="scaleModalDesc" data-i18n="scale_desc">
+        Los PDF pueden venir a escala 1:1 o reducida; las imágenes necesitan indicar su tamaño real en milímetros.
+      </div>
+
+      <div class="row" id="pdfScalePresetRow">
+        <button class="btn-primary btn-sm scale-preset-btn" data-scale="1">1:1 (Real)</button>
+        <button class="btn-ghost btn-sm scale-preset-btn" data-scale="2">1:2</button>
+        <button class="btn-ghost btn-sm scale-preset-btn" data-scale="5">1:5</button>
+        <button class="btn-ghost btn-sm scale-preset-btn" data-scale="10">1:10</button>
+      </div>
+
+      <div class="field-grid">
+        <div class="field"><label data-i18n="target_width">Ancho real (mm)</label><input type="number" id="modalTargetWidth" value="1000" min="10" max="20000" step="10" /></div>
+        <div class="field"><label data-i18n="target_height">Alto real (mm)</label><input type="number" id="modalTargetHeight" value="620" min="10" max="20000" step="10" /></div>
+      </div>
+
+      <div class="field">
+        <label data-i18n="scale_factor">Factor de escala</label>
+        <input type="number" id="modalScaleFactor" value="1" min="0.01" max="500" step="0.1" />
+      </div>
+
+      <div class="kv-box">
+        <span class="k" data-i18n="base_size">Base:</span><span class="v" id="modalBaseSize">—</span>
+        <span class="k" data-i18n="final_size">Final:</span><span class="v" id="modalFinalSize">—</span>
+      </div>
+
+      <div class="row">
+        <button class="btn-ghost" id="btnScaleModalCancel" data-i18n="cancel">Cancelar</button>
+        <button class="btn-primary" id="btnScaleModalConfirm" data-i18n="apply">Aplicar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast hidden" id="toast"></div>
+
+  <script src="/static/app.js?v=11"></script>
+</body>
+</html>
